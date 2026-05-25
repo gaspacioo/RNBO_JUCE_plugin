@@ -48,17 +48,18 @@ jobs:
       run: |
         cmake --build build --config Release --parallel 4
 
-    # 6. Salva i file compilati (.vst3) come artefatti scaricabili
+# 6. Salva i file compilati (.vst3) come artefatti scaricabili
+     Tariffe finali corrette con upload-artifact
     - name: Upload VST3 Artifact (Mac)
       if: matrix.os == 'macos-latest'
-      uses: actions/artifacts@v4
+      uses: actions/upload-artifact@v4
       with:
         name: VST3-Mac
-        path: build/**/*_artifacts/Release/VST3/*.vst3/  # Verifica il percorso di output di CMake
+        path: build/**/*_artifacts/Release/VST3/*.vst3/
 
     - name: Upload VST3 Artifact (Windows)
       if: matrix.os == 'windows-latest'
-      uses: actions/artifacts@v4
+      uses: actions/upload-artifact@v4
       with:
         name: VST3-Windows
-        path: build/**/*_artifacts/Release/VST3/**/*.vst3 # Su Windows a volte crea una struttura a cartelle interna
+        path: build/**/*_artifacts/Release/VST3/**/*.vst3
