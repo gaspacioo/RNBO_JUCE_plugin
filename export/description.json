@@ -1,0 +1,90 @@
+{
+  "parameters": [
+    {
+      "type": "ParameterTypeNumber",
+      "index": 0,
+      "name": "gain",
+      "paramId": "gain",
+      "minimum": -60,
+      "maximum": 12,
+      "exponent": 1,
+      "steps": 0,
+      "initialValue": 0,
+      "isEnum": false,
+      "enumValues": [],
+      "displayName": "",
+      "unit": "",
+      "order": 0,
+      "debug": false,
+      "visible": true,
+      "signalIndex": null,
+      "ioType": "IOTypeUndefined"
+    }
+  ],
+  "numParameters": 1,
+  "numSignalInParameters": 0,
+  "numSignalOutParameters": 0,
+  "numInputChannels": 2,
+  "numOutputChannels": 2,
+  "numMidiInputPorts": 0,
+  "numMidiOutputPorts": 0,
+  "transportUsed": false,
+  "externalDataRefs": [],
+  "patcherSerial": 0,
+  "inports": [],
+  "outports": [
+    {
+      "tag": "in_rms_L",
+      "meta": ""
+    },
+    {
+      "tag": "in_rms_R",
+      "meta": ""
+    },
+    {
+      "tag": "out_rms_L",
+      "meta": ""
+    },
+    {
+      "tag": "out_rms_R",
+      "meta": ""
+    }
+  ],
+  "inlets": [
+    {
+      "type": "signal",
+      "index": 1,
+      "tag": "in1",
+      "meta": ""
+    },
+    {
+      "type": "signal",
+      "index": 2,
+      "tag": "in2",
+      "meta": ""
+    }
+  ],
+  "outlets": [
+    {
+      "type": "signal",
+      "index": 1,
+      "tag": "out1",
+      "meta": ""
+    },
+    {
+      "type": "signal",
+      "index": 2,
+      "tag": "out2",
+      "meta": ""
+    }
+  ],
+  "presetid": "rnbo",
+  "meta": {
+    "architecture": "x64",
+    "filename": "simpleMeter.maxpat",
+    "rnboobjname": "rnbomatic",
+    "maxversion": "9.0.9",
+    "rnboversion": "1.3.5",
+    "name": "untitled"
+  }
+}

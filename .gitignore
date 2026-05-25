@@ -1,0 +1,5 @@
+/build/
+/.Builds/
+/JuiceLibraryCode/
+.DS_Store
+*.user

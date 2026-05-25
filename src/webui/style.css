@@ -1,0 +1,412 @@
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    /*background: #141414;*/
+    background: #000000;
+    /*color: #ececec;*/
+    color: rgb(194, 146, 68);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 12px;
+    width: 100%;
+    height: 100%;
+    user-select: none;
+}
+
+/* ==========================================================================
+   METERS LOGIC & LAYOUT
+   ========================================================================== */
+.meters {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 32px;
+    flex: 0 0 auto;
+}
+
+.meter {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 56px;
+    flex: 0 0 56px;
+}
+
+.meter-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 56px;
+    height: 12px;
+    flex: 0 0 12px;
+}
+
+.meter-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    opacity: 0.7;
+    line-height: 12px;
+}
+
+.meter-track {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 4px;
+    padding: 5px;
+    width: 56px;
+    height: 152px;
+    flex: 0 0 152px;
+    background: #252525;
+    border: 1px solid #3a3a3a;
+    border-radius: 3px;
+}
+
+.meter-ch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    width: 20px;
+    flex: 0 0 20px;
+}
+
+.meter-bar {
+    position: relative;
+    width: 20px;
+    height: 112px;
+    flex: 0 0 112px;
+    background: rgba(0, 0, 0, 0.35);
+    border-radius: 2px;
+    border: 1px solid #333;
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+}
+
+.meter-fill {
+    width: 100%;
+    height: 0%;
+    background: linear-gradient(to top, #27ae60 0%, #f1c40f 70%, #e74c3c 100%);
+}
+
+.meter-peak {
+    position: absolute;
+    left: 1px;
+    right: 1px;
+    bottom: 0%;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.92);
+    border-radius: 1px;
+    box-shadow: 0 0 3px rgba(255, 255, 255, 0.35);
+    pointer-events: none;
+    opacity: 0;
+}
+
+.meter-peak.visible {
+    opacity: 1;
+}
+
+.db-rms,
+.db-peak {
+    display: block;
+    width: 20px;
+    height: 9px;
+    flex: 0 0 9px;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 0.5rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 9px;
+    text-align: center;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.db-rms {
+    opacity: 0.85;
+}
+
+.db-peak {
+    opacity: 0.55;
+}
+
+.clip-led {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #2a2a2a;
+    border: 1px solid #404040;
+    flex: 0 0 7px;
+}
+
+.clip-led.active {
+    background: #e74c3c;
+    border-color: #ff6b6b;
+    box-shadow: 0 0 5px rgba(231, 76, 60, 0.85);
+}
+
+/* ==========================================================================
+   VOLUME FADER (ROTATED SLIDER)
+   ========================================================================== */
+.volume {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    width: 56px;
+    height: 170px;
+    flex: 0 0 56px;
+}
+
+.volume-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    opacity: 0.7;
+    line-height: 12px;
+    height: 12px;
+}
+
+.fader-track {
+    position: relative;
+    width: 20px;
+    height: 112px;
+    display: flex;
+    justify-content: center;
+    margin-top: 5px;
+}
+
+#gainSlider {
+    -webkit-appearance: none;
+    appearance: none;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 112px;
+    height: 4px;
+    background: #181818;
+    border: 1px solid #333;
+    border-radius: 2px;
+    outline: none;
+    transform: translate(-50%, -50%) rotate(270deg); 
+    cursor: pointer;
+}
+
+#gainSlider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 22px;
+    background: #cccccc;
+    border: 1px solid #444;
+    border-radius: 1px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    background-image: linear-gradient(to right, transparent 45%, #e74c3c 45%, #e74c3c 55%, transparent 55%);
+}
+
+#gainSlider::-moz-range-thumb {
+    width: 14px;
+    height: 22px;
+    background: #cccccc;
+    border: 1px solid #444;
+    border-radius: 1px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    background-image: linear-gradient(to right, transparent 45%, #e74c3c 45%, #e74c3c 55%, transparent 55%);
+}
+
+#gainSlider:active::-webkit-slider-thumb {
+    background-color: #eeeeee;
+}
+
+#gainValue {
+    width: 56px;
+    height: 12px;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 0.6rem;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    opacity: 0.85;
+    line-height: 12px;
+}
+
+/* ==========================================================================
+   JPEG COMPANY LOGO BUTTON 
+   ========================================================================== */
+.info-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  
+  width: 50px;   
+  height: 50px;
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: transform 0.2s ease;
+}
+
+.logo-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0.75;
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+.info-button:hover {
+  transform: scale(1.03);
+}
+
+.info-button:hover .logo-image {
+  opacity: 1;
+  filter: brightness(1.1);
+}
+
+.info-button.active .logo-image {
+  opacity: 1;
+  filter: brightness(1.15);
+}
+
+/* ==========================================================================
+   INTERFACCIA OVERLAY (MODAL ABOUT)
+   ========================================================================== */
+a { color: inherit; } 
+
+.modal {
+    display: none;             
+    position: fixed;  
+    top: 0;
+    left: 0;
+    width: 100vw;              
+    height: 100vh;             
+    z-index: 99999;            
+
+    justify-content: center;
+    align-items: center;
+
+    background-color: rgba(10, 10, 10, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px); 
+}
+
+.modal-content {
+    background: #1e1e1e;       
+    border: 1px solid #3a3a3a;
+    border-radius: 6px;
+    padding: 24px;
+    width: 280px;
+    text-align: center;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+    
+    animation: modalPopIn 0.2s ease-out;
+}
+
+.modal-content h2 {
+    font-size: 1rem;
+    margin: 0 0 4px 0;
+    color: #ffffff;
+}
+
+.plugin-version {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace !important;
+    font-size: 0.60rem !important;   
+    letter-spacing: 0.05em !important;
+    opacity: 0.45 !important;        
+    margin: 2px 0 12px 0 !important; 
+    display: block !important;
+}
+
+.modal-divider {
+  border: 0;
+  height: 1px;
+  background: #3a3a3a;
+  margin: 15px 0;
+}
+
+.modal-content p {
+    font-size: 0.75rem;
+    margin: 6px 0;
+    opacity: 0.8;
+}
+
+.modal-content {
+    background: #1e1e1e;       
+    border: 1px solid #3a3a3a;
+    border-radius: 6px;
+    padding: 24px;
+    width: 300px;
+    text-align: center;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+    animation: modalPopIn 0.2s ease-out;
+}
+
+.modal-logo {
+    width: 100%;
+    max-width: 240px;       
+    height: auto;           
+    display: block;         
+    margin: 0 auto 10px auto; 
+    object-fit: contain;    
+}
+
+.credits-text {
+    font-size: 0.65rem !important;
+    opacity: 0.4 !important;
+    margin-top: 12px !important;
+}
+
+.modal-close-btn {
+    margin-top: 16px;
+    background: #333333;
+    border: 1px solid #444444;
+    color: #ececec;
+    padding: 6px 16px;
+    font-size: 0.75rem;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.modal-close-btn:hover {
+    background: #444444;
+    color: #ffffff;
+}
+
+@keyframes modalPopIn {
+    from {
+        opacity: 0;
+        transform: scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
