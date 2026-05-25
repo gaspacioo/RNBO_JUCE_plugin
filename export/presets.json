@@ -2,8 +2,14 @@
   {
     "name": "untitled",
     "preset": {
+      "distance": {
+        "value": 0
+      },
       "gain": {
         "value": 0
+      },
+      "temperature": {
+        "value": 20
       }
     }
   }

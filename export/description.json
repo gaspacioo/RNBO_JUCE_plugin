@@ -19,9 +19,49 @@
       "visible": true,
       "signalIndex": null,
       "ioType": "IOTypeUndefined"
+    },
+    {
+      "type": "ParameterTypeNumber",
+      "index": 1,
+      "name": "distance",
+      "paramId": "distance",
+      "minimum": 0,
+      "maximum": 60,
+      "exponent": 1,
+      "steps": 0,
+      "initialValue": 0,
+      "isEnum": false,
+      "enumValues": [],
+      "displayName": "",
+      "unit": "",
+      "order": 0,
+      "debug": false,
+      "visible": true,
+      "signalIndex": null,
+      "ioType": "IOTypeUndefined"
+    },
+    {
+      "type": "ParameterTypeNumber",
+      "index": 2,
+      "name": "temperature",
+      "paramId": "temperature",
+      "minimum": -10,
+      "maximum": 40,
+      "exponent": 1,
+      "steps": 0,
+      "initialValue": 20,
+      "isEnum": false,
+      "enumValues": [],
+      "displayName": "",
+      "unit": "",
+      "order": 0,
+      "debug": false,
+      "visible": true,
+      "signalIndex": null,
+      "ioType": "IOTypeUndefined"
     }
   ],
-  "numParameters": 1,
+  "numParameters": 3,
   "numSignalInParameters": 0,
   "numSignalOutParameters": 0,
   "numInputChannels": 2,
@@ -43,6 +83,10 @@
     },
     {
       "tag": "out_rms_L",
+      "meta": ""
+    },
+    {
+      "tag": "delay_time",
       "meta": ""
     },
     {

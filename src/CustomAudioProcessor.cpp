@@ -177,6 +177,8 @@ void CustomAudioProcessor::handleMessageEvent (const RNBO::MessageEvent& event)
             meterLevels.outL.store (value, std::memory_order_relaxed);
         else if (tag == tagOutRmsR)
             meterLevels.outR.store (value, std::memory_order_relaxed);
+        else if (tag == tagDelayTime)
+            meterLevels.delayTime.store (value, std::memory_order_relaxed);
     }
 
     RNBO::EventHandler::handleMessageEvent (event);

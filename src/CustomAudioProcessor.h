@@ -34,6 +34,8 @@ public:
         std::atomic<float> inPeakR  { -100.f };
         std::atomic<float> outPeakL { -100.f };
         std::atomic<float> outPeakR { -100.f };
+
+        std::atomic<float> delayTime { 0.f };
     };
 
     MeterLevels meterLevels;
@@ -45,6 +47,8 @@ private:
     static constexpr RNBO::MessageTag tagInRmsR  = RNBO::TAG ("in_rms_R");
     static constexpr RNBO::MessageTag tagOutRmsL = RNBO::TAG ("out_rms_L");
     static constexpr RNBO::MessageTag tagOutRmsR = RNBO::TAG ("out_rms_R");
+
+    static constexpr RNBO::MessageTag tagDelayTime = RNBO::TAG ("delay_time");
 
     float _peakDecayDbPerBlock = 0.05f;
 

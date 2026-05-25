@@ -95,6 +95,10 @@ WebBrowserAudioEditor::WebBrowserAudioEditor (CustomAudioProcessor* const p,
     {
         _gainAttachment = std::make_unique<WebSliderParameterAttachment> (
             findParameter (p, "gain"), _gainRelay, nullptr);
+        _tempAttachment = std::make_unique<WebSliderParameterAttachment> (
+            findParameter (p, "temperature"), _tempRelay, nullptr);
+        _distAttachment = std::make_unique<WebSliderParameterAttachment> (
+            findParameter (p, "distance"), _distRelay, nullptr);    
     }
     catch (const std::exception& e)
     {
@@ -110,7 +114,7 @@ WebBrowserAudioEditor::WebBrowserAudioEditor (CustomAudioProcessor* const p,
 
     setResizable (true, true);
     setResizeLimits (260, 300, 720, 900);
-    setSize (360, 420);
+    setSize (380, 420);
 
     startTimerHz (60);
 }
@@ -152,6 +156,8 @@ void WebBrowserAudioEditor::sendMeterLevelsToWebView()
     payload->setProperty ("inPeakR",   levels.inPeakR.load (std::memory_order_relaxed));
     payload->setProperty ("outPeakL",  levels.outPeakL.load (std::memory_order_relaxed));
     payload->setProperty ("outPeakR",  levels.outPeakR.load (std::memory_order_relaxed));
+    payload->setProperty ("delayTime", levels.delayTime.load (std::memory_order_relaxed));
+    payload->setProperty ("sampleRate", _audioProcessor->getSampleRate());
 
     _webComponent.emitEventIfBrowserIsVisible ("meterLevels", var (payload.get()));
 }

@@ -71,6 +71,33 @@
         </div>
       </div>
     </div>
+
+    <div class="phase-controls" aria-label="Phase alignment controls">
+      <div class="phase-title">Phase Align</div>
+      <div class="phase-grid">
+        <label class="param-field" for="temperatureInput">
+          <span class="param-label">Temperature</span>
+          <span class="param-input-wrap">
+            <input type="number" id="temperatureInput" class="param-input" min="-10" max="40" step="0.1" value="20.0" inputmode="decimal" autocomplete="off" aria-label="Temperature">
+            <span class="param-unit">°C</span>
+          </span>
+        </label>
+
+        <label class="param-field" for="distanceInput">
+          <span class="param-label">Distance</span>
+          <span class="param-input-wrap">
+            <input type="number" id="distanceInput" class="param-input" min="0" max="60" step="0.1" value="0.0" inputmode="decimal" autocomplete="off" aria-label="Distance">
+            <span class="param-unit">m</span>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <div class="delay-info">
+      <span class="delay-label">Delay:</span>
+      <span id="delayTimeValue" class="delay-value">0.0 ms</span>
+    </div>
+    
   </div>
 
   <div id="aboutModal" class="modal">

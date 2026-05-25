@@ -1,7 +1,7 @@
 import * as Juce from "juce-framework-frontend";
 
 // ===== DEBUG WINDOW =====
-const DEBUG_ENABLED = true;
+const DEBUG_ENABLED = false;
 const DEBUG_LOGS = [];
 const MAX_LOGS = 50;
 
@@ -114,14 +114,29 @@ const METER_MAX_DB = 0;
 const CLIP_THRESHOLD_DB = -0.1;
 const CLIP_HOLD_MS = 400;
 const SILENCE_DB = -90;
+
 const GAIN_MIN_DB = -60;
 const GAIN_MAX_DB = 12;
 const GAIN_DEFAULT_DB = 0;
 const GAIN_STEP_DB = 0.1;
 
+const PARAM_RANGE_MIN_SPAN = 1.5;
+
+const TEMP_MIN = -10;
+const TEMP_MAX = 40;
+const TEMP_DEFAULT = 20;
+const TEMP_STEP = 0.1;
+
+const DIST_MIN = 0;
+const DIST_MAX = 60;
+const DIST_DEFAULT = 0;
+const DIST_STEP = 0.1;
+
+const TEMP_RANGE = { start: TEMP_MIN, end: TEMP_MAX, skew: 1 };
+const DIST_RANGE = { start: DIST_MIN, end: DIST_MAX, skew: 1 };
+
 const clipHold = { input: null, output: null };
 
-// Inizializzazione sicura dell'About Menu (corretto refuso variabili)
 function setupAboutMenu() {
     const modal = document.getElementById("aboutModal");
     const infoBtn = document.getElementById("infoBtn");
@@ -150,25 +165,51 @@ function setupAboutMenu() {
     };
 }
 
-// ===== FUNZIONI DI NORMALIZZAZIONE RIPRISTINATE =====
-function getGainRange(state) {
-    const props = state?.properties;
-    if (props && props.end - props.start > 1.5)
-        return { start: props.start, end: props.end, skew: props.skew ?? 1 };
+// ===== FUNZIONI DI NORMALIZZAZIONE =====
+function sanitizeRange(range, fallback) {
+    const start = Number(range?.start);
+    const end = Number(range?.end);
+    const skew = Number(range?.skew ?? 1);
 
-    return { start: GAIN_MIN_DB, end: GAIN_MAX_DB, skew: 1 };
+    if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+        return {
+            start,
+            end,
+            skew: Number.isFinite(skew) && skew > 0 ? skew : 1,
+        };
+    }
+
+    return fallback;
 }
 
-function dbToNormalised(db, range) {
+function getParamRange(state, fallback) {
+    const props = state?.properties;
+    const range = sanitizeRange(props, fallback);
+
+    if (range.end - range.start > PARAM_RANGE_MIN_SPAN)
+        return range;
+
+    return fallback;
+}
+
+function getGainRange(state) {
+    return getParamRange(state, { start: GAIN_MIN_DB, end: GAIN_MAX_DB, skew: 1 });
+}
+
+function clampToRange(value, range) {
+    return Math.max(range.start, Math.min(range.end, value));
+}
+
+function valueToNormalised(value, range) {
     const { start, end, skew } = range;
     if (end === start)
         return 0;
 
-    const clamped = Math.max(start, Math.min(end, db));
+    const clamped = clampToRange(value, range);
     return Math.pow((clamped - start) / (end - start), skew);
 }
 
-function normalisedToDb(norm, range) {
+function normalisedToValue(norm, range) {
     const { start, end, skew } = range;
     if (end === start) 
         return start;
@@ -177,8 +218,24 @@ function normalisedToDb(norm, range) {
     return start + (end - start) * Math.pow(clampedNorm, 1 / skew);
 }
 
+function dbToNormalised(db, range) {
+    return valueToNormalised(db, range);
+}
+
+function normalisedToDb(norm, range) {
+    return normalisedToValue(norm, range);
+}
+
 function clampGainDb(db) {
     return Math.max(GAIN_MIN_DB, Math.min(GAIN_MAX_DB, db));
+}
+
+function parseNumericInputValue(value) {
+    return Number.parseFloat(String(value).replace(',', '.'));
+}
+
+function formatNumericValue(value, decimals = 1) {
+    return Number.isFinite(value) ? value.toFixed(decimals) : '';
 }
 
 // ===== FUNZIONI GRAFICHE METER =====
@@ -288,7 +345,6 @@ function wireGain() {
 
     let state = null;
     try {
-        // Chiamata corretta tramite il modulo JUCE esportato
         state = Juce.getSliderState('gain');
     } catch (e) {
         debugLog(`✗ Error getting slider state: ${e.message}`, 'ERROR');
@@ -389,6 +445,173 @@ function wireGain() {
     debugLog('✓ wireGain completed successfully', 'SUCCESS');
 }
 
+function wireNumericParameter({ paramId, inputId, fallbackRange, step, defaultValue, decimals = 1 }) {
+    debugLog(`wireNumericParameter(${paramId}): Starting...`);
+
+    const input = document.getElementById(inputId);
+    if (!input) {
+        debugLog(`✗ ${inputId} element not found`, 'ERROR');
+        return;
+    }
+
+    let state = null;
+    try {
+        state = Juce.getSliderState(paramId);
+    } catch (e) {
+        debugLog(`✗ Error getting ${paramId} state: ${e.message}`, 'ERROR');
+        return;
+    }
+
+    if (!state) {
+        debugLog(`✗ getSliderState returned null for ${paramId}`, 'ERROR');
+        return;
+    }
+
+    const updateInputProperties = () => {
+        const range = getParamRange(state, fallbackRange);
+        input.min = formatNumericValue(range.start, decimals);
+        input.max = formatNumericValue(range.end, decimals);
+        input.step = String(step);
+    };
+
+    const sync = () => {
+        try {
+            const range = getParamRange(state, fallbackRange);
+            const value = clampToRange(normalisedToValue(state.getNormalisedValue(), range), range);
+
+            updateInputProperties();
+            input.classList.remove('invalid');
+
+            if (document.activeElement !== input)
+                input.value = formatNumericValue(value, decimals);
+        } catch (e) {
+            debugLog(`✗ Error syncing ${paramId}: ${e.message}`, 'ERROR');
+        }
+    };
+
+    const setParameterValue = (value, updateInput = false) => {
+        if (!Number.isFinite(value)) {
+            input.classList.add('invalid');
+            return;
+        }
+
+        try {
+            const range = getParamRange(state, fallbackRange);
+            const clamped = clampToRange(value, range);
+            state.setNormalisedValue(valueToNormalised(clamped, range));
+
+            input.classList.remove('invalid');
+            if (updateInput)
+                input.value = formatNumericValue(clamped, decimals);
+        } catch (e) {
+            debugLog(`✗ Error setting ${paramId}: ${e.message}`, 'ERROR');
+        }
+    };
+
+    const commitInput = () => {
+        const value = parseNumericInputValue(input.value);
+
+        if (!Number.isFinite(value)) {
+            sync();
+            return;
+        }
+
+        setParameterValue(value, true);
+    };
+
+    let editGestureActive = false;
+    const beginEditGesture = () => {
+        if (editGestureActive)
+            return;
+
+        editGestureActive = true;
+        try { state.sliderDragStarted(); } catch (e) { debugLog(`Error starting ${paramId} edit: ${e.message}`, 'ERROR'); }
+    };
+
+    const endEditGesture = () => {
+        commitInput();
+
+        if (!editGestureActive)
+            return;
+
+        editGestureActive = false;
+        try { state.sliderDragEnded(); } catch (e) { debugLog(`Error ending ${paramId} edit: ${e.message}`, 'ERROR'); }
+    };
+
+    try {
+        state.valueChangedEvent.addListener(sync);
+        state.propertiesChangedEvent.addListener(sync);
+        debugLog(`✓ Event listeners added for ${paramId}`, 'SUCCESS');
+    } catch (e) {
+        debugLog(`✗ Error adding ${paramId} listeners: ${e.message}`, 'ERROR');
+    }
+
+    updateInputProperties();
+    sync();
+
+    input.addEventListener('focus', beginEditGesture);
+    input.addEventListener('pointerdown', beginEditGesture);
+
+    input.addEventListener('input', () => {
+        beginEditGesture();
+        setParameterValue(parseNumericInputValue(input.value));
+    });
+
+    input.addEventListener('change', commitInput);
+    input.addEventListener('blur', endEditGesture);
+
+    input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            commitInput();
+            input.blur();
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            sync();
+            input.blur();
+        }
+    });
+
+    input.addEventListener('dblclick', (event) => {
+        event.preventDefault();
+        beginEditGesture();
+        setParameterValue(defaultValue, true);
+        endEditGesture();
+    });
+
+    debugLog(`✓ wireNumericParameter(${paramId}) completed successfully`, 'SUCCESS');
+}
+
+function wirePhaseControls() {
+    wireNumericParameter({
+        paramId: 'temperature',
+        inputId: 'temperatureInput',
+        fallbackRange: TEMP_RANGE,
+        step: TEMP_STEP,
+        defaultValue: TEMP_DEFAULT,
+    });
+
+    wireNumericParameter({
+        paramId: 'distance',
+        inputId: 'distanceInput',
+        fallbackRange: DIST_RANGE,
+        step: DIST_STEP,
+        defaultValue: DIST_DEFAULT,
+    });
+}
+
+function setDelayTime(delayValue, sampleRate) {
+    const delayLabel = document.getElementById('delayTimeValue');
+    if (!delayLabel) return;
+
+    let text = formatNumericValue(delayValue, 1) + ' ms';
+    if (Number.isFinite(sampleRate) && sampleRate > 0) {
+        const samples = (delayValue * sampleRate) / 1000;
+        text += ` (${Math.round(samples)} sa)`;
+    }
+    delayLabel.textContent = text;
+}
+
 function wireMeters() {
     debugLog('wireMeters: Starting...');
     const backend = window.__JUCE__?.backend;
@@ -412,6 +635,7 @@ function wireMeters() {
                 'outputRmsL', 'outputRmsR', 'outputPeakValL', 'outputPeakValR',
                 'outputClip', 'output', data.outL, data.outR, data.outPeakL, data.outPeakR
             );
+            setDelayTime(data.delayTime, data.sampleRate);
         });
         debugLog('✓ meterLevels event listener added', 'SUCCESS');
     } catch (e) {
@@ -431,6 +655,7 @@ function init() {
 
     debugLog('✓ __JUCE__ available, initializing...', 'SUCCESS');
     wireGain();
+    wirePhaseControls();
     wireMeters();
     debugLog('=== Init Complete ===', 'SUCCESS');
 }
@@ -448,6 +673,7 @@ async function initAsync() {
 
     debugLog('✓ Starting component initialization...', 'SUCCESS');
     wireGain();
+    wirePhaseControls();
     wireMeters();
     debugLog('=== Init Complete ===', 'SUCCESS');
 }

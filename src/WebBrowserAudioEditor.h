@@ -29,6 +29,8 @@ private:
     RNBO::CoreObject&     _rnboObject;
 
     WebSliderRelay _gainRelay { "gain" };
+    WebSliderRelay _tempRelay { "temperature" };
+    WebSliderRelay _distRelay { "distance" };
 
     struct SinglePageBrowser : WebBrowserComponent
     {
@@ -51,11 +53,15 @@ private:
                     juce::File::SpecialLocationType::tempDirectory)))
             .withNativeIntegrationEnabled()
             .withOptionsFrom (_gainRelay)
+            .withOptionsFrom (_tempRelay)
+            .withOptionsFrom (_distRelay)
             .withKeepPageLoadedWhenBrowserIsHidden()
             .withResourceProvider ([this] (const auto& url) { return getResource (url); })
     };
 
     std::unique_ptr<WebSliderParameterAttachment> _gainAttachment;
+    std::unique_ptr<WebSliderParameterAttachment> _tempAttachment;
+    std::unique_ptr<WebSliderParameterAttachment> _distAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (WebBrowserAudioEditor)
 };
