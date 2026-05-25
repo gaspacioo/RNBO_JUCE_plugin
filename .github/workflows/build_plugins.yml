@@ -29,7 +29,7 @@ jobs:
 
     - name: CMake Build
       run: |
-        cmake --build build --config Release --target RNBOAudioPlugin_VST3 --parallel 4
+        cmake --build
 
     - name: Upload VST3 Artifact (Windows)
       uses: actions/upload-artifact@v4
