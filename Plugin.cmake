@@ -96,7 +96,8 @@ target_compile_definitions(RNBOAudioPlugin
   JUCE_USE_CURL=0     # If you remove this, add `NEEDS_CURL TRUE` to the `juce_add_plugin` call
   JUCE_VST3_CAN_REPLACE_VST2=0
   RNBO_JUCE_NO_CREATE_PLUGIN_FILTER=1 #don't have RNBO create its own createPluginFilter function, we'll create it ourselves
-  RNBO_JUCE_PARAM_DEFAULT_NOTIFY=$<BOOL:${PLUGIN_PARAM_DEFAULT_NOTIFY}>)
+  RNBO_JUCE_PARAM_DEFAULT_NOTIFY=$<BOOL:${PLUGIN_PARAM_DEFAULT_NOTIFY}>
+  JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=1)
 
 # `target_link_libraries` links libraries and JUCE modules to other libraries or executables. Here,
 # we're linking our executable target to the `juce::juce_audio_utils` module. Inter-module
