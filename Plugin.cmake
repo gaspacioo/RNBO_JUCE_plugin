@@ -18,6 +18,9 @@ endif()
 
 if(RNBO_EDITOR_MODE STREQUAL "WEBVIEW")
   set(_needs_web_browser NEEDS_WEB_BROWSER TRUE)
+  if(WIN32)
+    set(_needs_webview2 NEEDS_WEBVIEW2 TRUE)
+  endif()
 endif()
 
 juce_add_plugin(RNBOAudioPlugin
@@ -35,7 +38,8 @@ juce_add_plugin(RNBOAudioPlugin
   PLUGIN_CODE "Rnb0"                   # A unique four-character plugin id with at least one upper-case character
   FORMATS ${PLUGIN_FORMATS}            # The formats to build. Other valid formats are: AAX Unity VST AU AUv3
   PRODUCT_NAME "RNBO Plugin"           # The name of the final executable, which can differ from the target name
-  ${_needs_web_browser})
+  ${_needs_web_browser}
+  ${_needs_webview2})
 
 # `juce_generate_juce_header` will create a JuceHeader.h for a given target, which will be generated
 # into your build tree. This should be included with `#include <JuceHeader.h>`. The include path for
@@ -105,6 +109,9 @@ if(RNBO_EDITOR_MODE STREQUAL "NATIVE")
 elseif(RNBO_EDITOR_MODE STREQUAL "WEBVIEW")
   target_compile_definitions(RNBOAudioPlugin PRIVATE RNBO_EDITOR_WEBVIEW)
   target_compile_definitions(RNBOAudioPlugin PUBLIC JUCE_WEB_BROWSER=1)
+  if(WIN32)
+    target_compile_definitions(RNBOAudioPlugin PUBLIC JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=1)
+  endif()
   target_link_libraries(RNBOAudioPlugin PRIVATE RNBOUIData)
 endif()
 
