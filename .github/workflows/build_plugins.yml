@@ -25,11 +25,11 @@ jobs:
 
     - name: CMake Generate
       run: |
-        cmake -B build -DCMAKE_BUILD_TYPE=Release -DRNBO_EDITOR_MODE=WEBVIEW
+        cmake -B build -G "Visual Studio 17 2022" -A x64 -DRNBO_EDITOR_MODE=WEBVIEW -DCMAKE_BUILD_TYPE=Release
 
     - name: CMake Build
       run: |
-        cmake --build build
+        cmake --build build --config Release --target RNBOAudioPlugin_VST3 --parallel 4
 
     - name: Upload VST3 Artifact (Windows)
       uses: actions/upload-artifact@v4
