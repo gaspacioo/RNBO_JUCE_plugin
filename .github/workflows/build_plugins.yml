@@ -29,7 +29,7 @@ jobs:
 
     - name: CMake Build
       run: |
-        cmake --build
+        cmake --build build --config Release
 
     - name: Upload VST3 Artifact (Windows)
       uses: actions/upload-artifact@v4
