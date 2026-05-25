@@ -48,7 +48,7 @@ private:
             .withNativeIntegrationEnabled()
             .withOptionsFrom (_gainRelay)
             .withKeepPageLoadedWhenBrowserIsHidden()
-            .withResourceProvider ([this] (const auto& url) { return getResource (url); })
+            //.withResourceProvider ([this] (const auto& url) { return getResource (url); })
     };
 
     std::unique_ptr<WebSliderParameterAttachment> _gainAttachment;
