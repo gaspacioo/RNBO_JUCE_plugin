@@ -28,12 +28,15 @@ jobs:
       run: |
         nuget install Microsoft.Web.WebView2 -OutputDirectory "C:\webview2"
         $webview2Dir = Get-ChildItem "C:\webview2" | Where-Object { $_.Name -like "Microsoft.Web.WebView2*" } | Select-Object -First 1
-        echo "WEBVIEW2_PACKAGE=$($webview2Dir.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        # L'ELEMENTO AGGIUNTO: Converte i backslash di Windows in slash per CMake
+        $cmakePath = $webview2Dir.FullName.Replace('\', '/')
+        echo "WEBVIEW2_PACKAGE=$cmakePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
     - name: CMake Generate
       shell: bash
+      # L'ELEMENTO AGGIUNTO: Richiamo della variabile in modo sicuro tramite sintassi di GitHub
       run: |
-        cmake -B build -G "Visual Studio 17 2022" -A x64 -DRNBO_EDITOR_MODE=WEBVIEW -DJUCE_WEBVIEW2_PACKAGE_LOCATION="$WEBVIEW2_PACKAGE" -DCMAKE_BUILD_TYPE=Release
+        cmake -B build -G "Visual Studio 17 2022" -A x64 -DRNBO_EDITOR_MODE=WEBVIEW -DJUCE_WEBVIEW2_PACKAGE_LOCATION="${{ env.WEBVIEW2_PACKAGE }}" -DCMAKE_BUILD_TYPE=Release
 
     - name: CMake Build
       shell: bash
