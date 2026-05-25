@@ -18,7 +18,7 @@ endif()
 
 if(RNBO_EDITOR_MODE STREQUAL "WEBVIEW")
   set(_needs_web_browser NEEDS_WEB_BROWSER TRUE)
-  if(WIN32)
+  if(APPLE)
     set(_needs_webview2 NEEDS_WEBVIEW2 TRUE)
   endif()
 endif()
