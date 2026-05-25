@@ -1,4 +1,4 @@
-name: Build Audio Plugins
+name: Build Audio Plugins (Windows Only)
 
 on:
   push:
@@ -8,15 +8,8 @@ on:
 
 jobs:
   build:
-    name: Build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-          - os: windows-latest
+    name: Build on Windows
+    runs-on: windows-latest
 
     steps:
     - name: Checkout code
@@ -28,27 +21,18 @@ jobs:
       uses: lukka/get-cmake@latest
 
     - name: Set up MSVC (Windows)
-      if: matrix.os == 'windows-latest'
       uses: ilammy/msvc-dev-cmd@v1
 
     - name: CMake Generate
       run: |
-        cmake -B build -DCMAKE_BUILD_TYPE=Release
+        cmake -B build -DCMAKE_BUILD_TYPE=Release -DRNBO_EDITOR_MODE=WEBVIEW
 
     - name: CMake Build
       run: |
         cmake --build build --config Release --parallel 4
 
-    - name: Upload VST3 Artifact (Mac)
-      if: matrix.os == 'macos-latest'
-      uses: actions/upload-artifact@v4
-      with:
-        name: VST3-Mac
-        path: build/**/*_artifacts/Release/VST3/*.vst3/
-
     - name: Upload VST3 Artifact (Windows)
-      if: matrix.os == 'windows-latest'
       uses: actions/upload-artifact@v4
       with:
         name: VST3-Windows
-        path: build/**/*_artifacts/Release/VST3/**/*.vst3
+        path: build/RNBOAudioPlugin_artefacts/Release/VST3/
