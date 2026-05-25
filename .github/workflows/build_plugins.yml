@@ -23,6 +23,12 @@ jobs:
     - name: Set up MSVC (Windows)
       uses: ilammy/msvc-dev-cmd@v1
 
+    - name: Install WebView2 (Windows)
+      shell: pwsh
+      run: |
+        nuget install Microsoft.Web.WebView2 -OutputDirectory "C:\webview2" -Version 1.0.2357.28
+        echo "JUCE_WEBVIEW2_PACKAGE_LOCATION=C:\webview2\Microsoft.Web.WebView2.1.0.2357.28" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
     - name: CMake Generate
       shell: bash
       run: |
