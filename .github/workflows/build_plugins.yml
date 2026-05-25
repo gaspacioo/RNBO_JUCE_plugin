@@ -1,0 +1,64 @@
+name: Build Audio Plugins
+
+# Il workflow si attiva ad ogni push sulla branca principale (main o master)
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        # Configuriamo i sistemi operativi su cui compilare contemporaneamente
+        include:
+          - os: macos-latest
+            cmake_preset: macos-release
+          - os: windows-latest
+            cmake_preset: win-release
+
+    steps:
+    # 1. Scarica il codice del tuo plugin sui server di GitHub
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive # Fondamentale se hai inserito JUCE come sottomodulo git
+
+    # 2. Configura CMake (Installa l'ultima versione disponibile)
+    - name: Configure CMake
+      uses: lukka/get-cmake@latest
+
+    # 3. [SOLO PER WINDOWS] Configura i tool di Visual Studio (MSVC)
+    - name: Set up MSVC (Windows)
+      if: matrix.os == 'windows-latest'
+      uses: ilammy/msvc-dev-cmd@v1
+
+    # 4. Genera i file di progetto con CMake
+    - name: CMake Generate
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+    # 5. Compila il plugin in modalità Release
+    - name: CMake Build
+      run: |
+        cmake --build build --config Release --parallel 4
+
+    # 6. Salva i file compilati (.vst3) come artefatti scaricabili
+    - name: Upload VST3 Artifact (Mac)
+      if: matrix.os == 'macos-latest'
+      uses: actions/artifacts@v4
+      with:
+        name: VST3-Mac
+        path: build/**/*_artifacts/Release/VST3/*.vst3/  # Verifica il percorso di output di CMake
+
+    - name: Upload VST3 Artifact (Windows)
+      if: matrix.os == 'windows-latest'
+      uses: actions/artifacts@v4
+      with:
+        name: VST3-Windows
+        path: build/**/*_artifacts/Release/VST3/**/*.vst3 # Su Windows a volte crea una struttura a cartelle interna
