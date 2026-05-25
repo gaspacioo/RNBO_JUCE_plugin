@@ -1,56 +1,47 @@
-name: Build RNBO JUCE Plugins
+name: Build Audio Plugins (Windows Only)
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ "main", "master" ]
   pull_request:
-    branches: [ main, master ]
-
-env:
-  BUILD_TYPE: Release
+    branches: [ "main", "master" ]
 
 jobs:
   build:
-    name: Build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest]
+    name: Build on Windows
+    runs-on: windows-latest
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v4
       with:
         submodules: recursive
 
-    - name: Set up MSVC (Windows Only)
-      if: matrix.os == 'windows-latest'
+    - name: Configure CMake
+      uses: lukka/get-cmake@latest
+
+    - name: Set up MSVC (Windows)
       uses: ilammy/msvc-dev-cmd@v1
 
-    - name: CMake Configure
+    - name: Install WebView2 (Windows)
+      shell: pwsh
       run: |
-        if [ "${{ matrix.os }}" = "windows-latest" ]; then
-          cmake -B build -G "Visual Studio 17 2022" -A x64 -DRNBO_EDITOR_MODE=WEBVIEW -DCMAKE_BUILD_TYPE=${{ env:BUILD_TYPE }}
-        else
-          cmake -B build -DRNBO_EDITOR_MODE=WEBVIEW -DCMAKE_BUILD_TYPE=${{ env:BUILD_TYPE }}
-        fi
+        nuget install Microsoft.Web.WebView2 -OutputDirectory "C:\webview2"
+        $webview2Dir = Get-ChildItem "C:\webview2" | Where-Object { $_.Name -like "Microsoft.Web.WebView2*" } | Select-Object -First 1
+        echo "WEBVIEW2_PACKAGE=$($webview2Dir.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+    - name: CMake Generate
       shell: bash
+      run: |
+        cmake -B build -G "Visual Studio 17 2022" -A x64 -DRNBO_EDITOR_MODE=WEBVIEW -DJUCE_WEBVIEW2_PACKAGE_LOCATION="$WEBVIEW2_PACKAGE" -DCMAKE_BUILD_TYPE=Release
 
     - name: CMake Build
+      shell: bash
       run: |
-        cmake --build build --config ${{ env:BUILD_TYPE }} --parallel 2
+        cmake --build build --config Release --parallel 2
 
-    - name: Upload Artifacts (macOS)
-      if: matrix.os == 'macos-latest' && success()
-      uses: actions/upload-artifact@v3
+    - name: Upload VST3 Artifact (Windows)
+      uses: actions/upload-artifact@v4
       with:
-        name: RNBO-Plugin-macOS
-        path: build/RNBOAudioPlugin_artefacts/Release/
-
-    - name: Upload Artifacts (Windows)
-      if: matrix.os == 'windows-latest' && success()
-      uses: actions/upload-artifact@v3
-      with:
-        name: RNBO-Plugin-Windows
-        path: build/RNBOAudioPlugin_artefacts/Release/
+        name: VST3-Windows
+        path: build/RNBOAudioPlugin_artefacts/Release/VST3/
