@@ -24,16 +24,14 @@ jobs:
       uses: ilammy/msvc-dev-cmd@v1
 
     - name: Install WebView2 (Windows)
-      shell: pwsh
-      # Aggiungiamo -ExcludeVersion per rimuovere i numeri di versione dalla cartella!
+      shell: bash
       run: |
-        nuget install Microsoft.Web.WebView2 -ExcludeVersion -OutputDirectory "C:\webview2"
+        nuget install Microsoft.Web.WebView2 -OutputDirectory "C:/webview2"
 
     - name: CMake Generate
       shell: bash
-      # Ora possiamo scrivere il percorso fisso, usando direttamente gli slash / compatibili con CMake
       run: |
-        cmake -B build -G "Visual Studio 17 2022" -A x64 -DRNBO_EDITOR_MODE=WEBVIEW -DJUCE_WEBVIEW2_PACKAGE_LOCATION="C:/webview2/Microsoft.Web.WebView2" -DCMAKE_BUILD_TYPE=Release
+        cmake -B build -G "Visual Studio 17 2022" -A x64 -DRNBO_EDITOR_MODE=WEBVIEW -DJUCE_WEBVIEW2_PACKAGE_LOCATION="C:/webview2" -DCMAKE_BUILD_TYPE=Release
 
     - name: CMake Build
       shell: bash
