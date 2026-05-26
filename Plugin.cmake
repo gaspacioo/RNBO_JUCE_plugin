@@ -97,8 +97,10 @@ target_compile_definitions(RNBOAudioPlugin
   JUCE_VST3_CAN_REPLACE_VST2=0
   RNBO_JUCE_NO_CREATE_PLUGIN_FILTER=1 #don't have RNBO create its own createPluginFilter function, we'll create it ourselves
   RNBO_JUCE_PARAM_DEFAULT_NOTIFY=$<BOOL:${PLUGIN_PARAM_DEFAULT_NOTIFY}>
-  JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=1)
-
+  )
+if(WIN32)
+  target_compile_definitions(RNBOAudioPlugin PUBLIC JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=1)
+endif()
 # `target_link_libraries` links libraries and JUCE modules to other libraries or executables. Here,
 # we're linking our executable target to the `juce::juce_audio_utils` module. Inter-module
 # dependencies are resolved automatically, so `juce_core`, `juce_events` and so on will also be
@@ -123,14 +125,13 @@ target_link_libraries(RNBOAudioPlugin
   juce::juce_recommended_warning_flags
   )
 
-#TODO windows and linux
 if(APPLE)
   install(
     TARGETS RNBOAudioPlugin_VST3
-    DESTINATION ~/Library/Audio/Plug-Ins/VST3/
+    DESTINATION /Library/Audio/Plug-Ins/VST3/
     )
   install(
     TARGETS RNBOAudioPlugin_AU
-    DESTINATION ~/Library/Audio/Plug-Ins/Components/
+    DESTINATION /Library/Audio/Plug-Ins/Components/
     )
 endif()

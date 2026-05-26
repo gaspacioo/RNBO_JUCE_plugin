@@ -1,6 +1,24 @@
 #include "WebBrowserAudioEditor.h"
 #include "BinaryData.h"
 
+// The dev server address. When a server is listening here, the browser loads from it
+// instead of the built-in resource provider, so you can iterate on src/webui/ without
+// recompiling. Use a server that disables caching and (optionally) auto-reloads:
+//
+//   # No-cache static server (manual page reload required after edits):
+//   python3 -c "
+//   import http.server
+//   class H(http.server.SimpleHTTPRequestHandler):
+//       def end_headers(self):
+//           self.send_header('Cache-Control', 'no-store')
+//           super().end_headers()
+//   http.server.test(HandlerClass=H, port=3000)
+//   "
+//
+//   # Hot-reload (auto-reloads browser on file change, requires Node):
+//   npx live-server --port=3000
+//
+// pageLoadHadNetworkError falls back to the resource provider when no server is running.
 #if JUCE_ANDROID
 static const juce::String kDevServerAddress = "http://10.0.2.2:3000/";
 #else
@@ -10,26 +28,37 @@ static const juce::String kDevServerAddress = "http://localhost:3000/";
 //==============================================================================
 bool WebBrowserAudioEditor::SinglePageBrowser::pageAboutToLoad (const String& newURL)
 {
+
+    // Hide the webview on every navigation so emitEventIfBrowserIsVisible won't try to
+    // evaluate JS against a page that hasn't initialised window.__JUCE__ yet.
+    // pageFinishedLoading reveals it again once the page is ready.
     setVisible (false);
 
+    // Allow the dev server and the JUCE resource provider root; block everything else
+    // so the single-page UI can't accidentally navigate away.
     return newURL.startsWith (kDevServerAddress)
         || newURL == getResourceProviderRoot();
 }
 
 bool WebBrowserAudioEditor::SinglePageBrowser::pageLoadHadNetworkError (const String& /*errorInfo*/)
 {
+    // Dev server is not reachable — fall back to serving the file via the resource provider.
+    // The flag prevents an infinite loop if the resource provider also somehow fails.
     if (! _devServerFailed)
     {
         _devServerFailed = true;
         goToURL (getResourceProviderRoot());
-        return false;
+        return false;   // we handled it; don't show the browser's error page
     }
 
-    return true;
+    return true;    // let the browser show its error page
 }
 
 void WebBrowserAudioEditor::SinglePageBrowser::pageFinishedLoading (const String& /*url*/)
 {
+    // Reveal the webview now that window.__JUCE__ is initialised. Keeping it hidden until
+    // this point prevents emitEventIfBrowserIsVisible from evaluating JS on a blank page,
+    // which would throw "undefined is not an object (evaluating 'window.__JUCE__.backend')".
     setVisible (true);
 }
 
@@ -70,7 +99,11 @@ WebBrowserAudioEditor::WebBrowserAudioEditor (CustomAudioProcessor* const p,
     , _rnboObject (rnboObject)
 {
     addChildComponent (_webComponent);
+
+    // Try the dev server first. If nothing is listening on that port,
+    // pageLoadHadNetworkError fires quickly and redirects to getResourceProviderRoot().
     _webComponent.goToURL (kDevServerAddress);
+    //_webComponent.goToURL(WebBrowserComponent::getResourceProviderRoot());
 
     setResizable (true, true);
     setResizeLimits (260, 300, 720, 900);
@@ -92,6 +125,7 @@ WebBrowserAudioEditor::WebBrowserAudioEditor (CustomAudioProcessor* const p,
 WebBrowserAudioEditor::~WebBrowserAudioEditor()
 {
     stopTimer();
+    //_audioProcessor->AudioProcessor::removeListener (this);
 }
 
 void WebBrowserAudioEditor::paint (Graphics& g)
@@ -129,6 +163,7 @@ void WebBrowserAudioEditor::sendMeterLevelsToWebView()
 std::optional<WebBrowserComponent::Resource>
 WebBrowserAudioEditor::getResource (const String& url)
 {
+    // Map "/" or "" to index.html; strip any leading slash for other paths.
     const auto filename = (url == "/" || url.isEmpty())
                             ? String ("index.html")
                             : url.fromFirstOccurrenceOf ("/", false, false);
@@ -136,6 +171,8 @@ WebBrowserAudioEditor::getResource (const String& url)
     const auto ext  = filename.fromLastOccurrenceOf (".", false, false).toLowerCase();
     const auto mime = getMimeForExtension (ext);
 
+    // Production: serve from binary data compiled into the binary.
+    // Mangle the filename the same way juce_add_binary_data does (non-alphanumeric → '_').
     String resourceName;
     for (auto c : filename)
         resourceName += (CharacterFunctions::isLetterOrDigit (c) || c == '_') ? c : juce_wchar ('_');

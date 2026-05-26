@@ -10,6 +10,9 @@
 
 if(RNBO_EDITOR_MODE STREQUAL "WEBVIEW")
   set(_needs_web_browser NEEDS_WEB_BROWSER TRUE)
+  if(WIN32)
+    set(_needs_webview2 NEEDS_WEBVIEW2 TRUE)
+    endif()
 endif()
 
 juce_add_gui_app(RNBOApp
@@ -19,7 +22,8 @@ juce_add_gui_app(RNBOApp
   # DOCUMENT_EXTENSIONS ...           # Specify file extensions that should be associated with this app
   COMPANY_NAME "cycling74"            # Specify the name of the app's author
   PRODUCT_NAME "RNBO App Example"     # The name of the final executable, which can differ from the target name
-  ${_needs_web_browser})
+  ${_needs_web_browser}
+  ${_needs_webview2})
 
 # `juce_generate_juce_header` will create a JuceHeader.h for a given target, which will be generated
 # into your build tree. This should be included with `#include <JuceHeader.h>`. The include path for
@@ -74,9 +78,12 @@ target_compile_definitions(RNBOApp
   JUCE_USE_CURL=0     # If you remove this, add `NEEDS_CURL TRUE` to the `juce_add_gui_app` call
   JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:RNBOApp,JUCE_PRODUCT_NAME>"
   JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:RNBOApp,JUCE_VERSION>"
-  RNBO_JUCE_PARAM_DEFAULT_NOTIFY=$<BOOL:${PLUGIN_PARAM_DEFAULT_NOTIFY}>)
-
-# `target_link_libraries` links libraries and JUCE modules to other libraries or executables. Here,
+  RNBO_JUCE_PARAM_DEFAULT_NOTIFY=$<BOOL:${PLUGIN_PARAM_DEFAULT_NOTIFY}>
+  )
+if(WIN32)
+  target_compile_definitions(RNBOApp PRIVATE JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=1)
+endif()
+  # `target_link_libraries` links libraries and JUCE modules to other libraries or executables. Here,
 # we're linking our executable target to the `juce::juce_gui_extra` module. Inter-module
 # dependencies are resolved automatically, so `juce_core`, `juce_events` and so on will also be
 # linked automatically. If we'd generated a binary data target above, we would need to link to it

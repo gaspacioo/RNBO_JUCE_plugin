@@ -184,7 +184,7 @@ function wireGain() {
     state.valueChangedEvent.addListener(sync);
     state.propertiesChangedEvent.addListener(sync);
 
-    sync();
+    //sync();
 
     slider.addEventListener('mousedown', () => state.sliderDragStarted());
     slider.addEventListener('touchstart', () => state.sliderDragStarted(), { passive: true });
