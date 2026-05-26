@@ -36,10 +36,16 @@ jobs:
     - name: CMake Build
       shell: bash
       run: |
-        cmake --build build --config Release --target RNBOAudioPlugin_VST3 --parallel 2
+        cmake --build build --config Release --parallel 2
         
     - name: Upload VST3 Artifact (Windows)
       uses: actions/upload-artifact@v4
       with:
         name: VST3-Windows
         path: build/RNBOAudioPlugin_artefacts/Release/VST3/
+
+    - name: Upload Standalone App Artifact (Windows)
+      uses: actions/upload-artifact@v4
+      with:
+        name: Standalone-App-Windows
+        path: build/RNBOApp_artefacts/Release/
