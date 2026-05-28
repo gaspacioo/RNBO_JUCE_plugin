@@ -109,27 +109,6 @@ function setClipLed(id, key, isClipping) {
     }, CLIP_HOLD_MS);
 }
 
-function setChannel(fillId, peakMarkerId, rmsLabelId, peakLabelId, rmsDb, peakDb) {
-    const fill = document.getElementById(fillId);
-    const peakMarker = document.getElementById(peakMarkerId);
-    const rmsLabel = document.getElementById(rmsLabelId);
-    const peakLabel = document.getElementById(peakLabelId);
-    if (fill) fill.style.height = dbToPercent(rmsDb) + '%';
-    if (peakMarker) {
-        const peakPct = dbToPercent(peakDb);
-        peakMarker.style.bottom = peakPct + '%';
-        peakMarker.classList.toggle('visible', peakPct > 0.5);
-    }
-    if (rmsLabel) rmsLabel.textContent = formatDbShort(rmsDb);
-    if (peakLabel) peakLabel.textContent = formatDbShort(peakDb);
-}
-
-function setStereoMeter(fillLId, fillRId, peakLId, peakRId, rmsLId, rmsRId, peakValLId, peakValRId, clipId, clipKey, rmsL, rmsR, peakL, peakR) {
-    setChannel(fillLId, peakLId, rmsLId, peakValLId, rmsL, peakL);
-    setChannel(fillRId, peakRId, rmsRId, peakValRId, rmsR, peakR);
-    setClipLed(clipId, clipKey, normalizeDb(rmsL) >= CLIP_THRESHOLD_DB || normalizeDb(rmsR) >= CLIP_THRESHOLD_DB || normalizeDb(peakL) >= CLIP_THRESHOLD_DB || normalizeDb(peakR) >= CLIP_THRESHOLD_DB);
-}
-
 // ===== INIZIALIZZAZIONE UNICA AL CARICAMENTO DEL DOM =====
 document.addEventListener("DOMContentLoaded", () => {
     createDebugWindow();
@@ -152,42 +131,62 @@ document.addEventListener("DOMContentLoaded", () => {
     const slider = document.getElementById("gainSlider");
     const label = document.getElementById("gainValue");
     
-    // Sfrutta getSliderState esportato dal modulo nativo di JUCE 8
+    // Agganciamo lo stato nativo del parametro C++
     const gainState = Juce.getSliderState("gain"); 
 
     if (slider && label && gainState) {
         debugLog('✓ Slider collegato allo stato nativo JUCE', 'SUCCESS');
 
+        // Forza i limiti geometrici del cursore HTML tra 0 e 1 (Normalizzato)
+        slider.min = "0";
+        slider.max = "1";
+        if (gainState.properties && gainState.properties.numSteps) {
+            slider.step = (1 / gainState.properties.numSteps).toString();
+        } else {
+            slider.step = "0.001";
+        }
+
+        // 1. Dal C++ alla UI (Aggiornamento da DAW o valore iniziale)
         gainState.valueChangedEvent.addListener(() => {
-            const range = getGainRange(gainState);
             const norm = gainState.getNormalisedValue();
-            const dbValue = normalisedToDb(norm, range);
             
-            label.textContent = dbValue.toFixed(1) + ' dB';
-            
+            // Muove lo slider usando solo il valore puro 0.0 -> 1.0
             if (document.activeElement !== slider) {
-                slider.value = dbValue.toFixed(1).replace(',', '.');
+                slider.value = norm;
             }
-        });
 
-        slider.addEventListener('input', (e) => {
+            // Converte il valore in dB SOLO per la stringa di testo
             const range = getGainRange(gainState);
-            const rawDb = parseFloat(e.target.value.replace(',', '.'));
-            const norm = dbToNormalised(rawDb, range);
-            
-            gainState.setNormalisedValue(norm);
-            label.textContent = rawDb.toFixed(1) + ' dB';
+            const dbValue = normalisedToDb(norm, range);
+            label.textContent = dbValue.toFixed(1) + ' dB';
         });
 
+        // 2. Dalla UI al C++ (Quando muovi il cursore)
+        slider.addEventListener('input', (e) => {
+            const norm = parseFloat(e.target.value);
+            
+            // Invia a JUCE il valore normalizzato (0-1) senza calcoli JS intermedi
+            gainState.setNormalisedValue(norm);
+            
+            // Mostra i dB aggiornati a schermo
+            const range = getGainRange(gainState);
+            const dbValue = normalisedToDb(norm, range);
+            label.textContent = dbValue.toFixed(1) + ' dB';
+        });
+
+        // 3. Gestione drag gesti per automazioni DAW
         slider.addEventListener('mousedown', () => gainState.sliderDragStarted());
         slider.addEventListener('mouseup', () => gainState.sliderDragEnded());
         slider.addEventListener('touchstart', () => gainState.sliderDragStarted(), { passive: true });
         slider.addEventListener('touchend', () => gainState.sliderDragEnded());
         
+        // 4. Doppio click per reset a 0 dB
         slider.addEventListener('dblclick', (e) => {
             e.preventDefault();
             const range = getGainRange(gainState);
-            gainState.setNormalisedValue(dbToNormalised(0, range));
+            // Calcola quale valore tra 0 e 1 corrisponde a 0 dB nel tuo range
+            const defaultNorm = dbToNormalised(0, range);
+            gainState.setNormalisedValue(defaultNorm);
         });
     } else {
         debugLog('✗ Impossibile trovare gainSlider o agganciare getSliderState', 'ERROR');
@@ -199,13 +198,11 @@ document.addEventListener("DOMContentLoaded", () => {
         
         window.__JUCE__.backend.addEventListener('meterLevels', (raw) => {
             let data = null;
-            
             if (typeof raw === 'string') {
                 try {
                     const fixedData = raw.replace(/(:\s*[-+]?\d+),(\d+)/g, '$1.$2');
                     data = JSON.parse(fixedData);
                 } catch (e) {
-                    debugLog("✗ Errore nel parse dei dati stringa dei Meter", 'WARN');
                     return;
                 }
             } else {
@@ -213,12 +210,27 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             if (data) {
-                setStereoMeter('inputFillL', 'inputFillR', 'inputPeakL', 'inputPeakR', 'inputRmsL', 'inputRmsR', 'inputPeakValL', 'inputPeakValR', 'inputClip', 'input', data.inL, data.inR, data.inPeakL, data.inPeakR);
-                setStereoMeter('outputFillL', 'outputFillR', 'outputPeakL', 'outputPeakR', 'outputRmsL', 'outputRmsR', 'outputPeakValL', 'outputPeakValR', 'outputClip', 'output', data.outL, data.outR, data.outPeakL, data.outPeakR);
+                // I tuoi meter usano ancora la logica Db nativa inviata via JSON personalizzato
+                const fillL = document.getElementById('inputFillL');
+                const fillR = document.getElementById('inputFillR');
+                if (fillL) fillL.style.height = dbToPercent(data.inL) + '%';
+                if (fillR) fillR.style.height = dbToPercent(data.inR) + '%';
+                
+                const outFillL = document.getElementById('outputFillL');
+                const outFillR = document.getElementById('outputFillR');
+                if (outFillL) outFillL.style.height = dbToPercent(data.outL) + '%';
+                if (outFillR) outFillR.style.height = dbToPercent(data.outR) + '%';
+                
+                const labelInL = document.getElementById('inputRmsL');
+                const labelInR = document.getElementById('inputRmsR');
+                if (labelInL) labelInL.textContent = formatDbShort(data.inL);
+                if (labelInR) labelInR.textContent = formatDbShort(data.inR);
+
+                const labelOutL = document.getElementById('outputRmsL');
+                const labelOutR = document.getElementById('outputRmsR');
+                if (labelOutL) labelOutL.textContent = formatDbShort(data.outL);
+                if (labelOutR) labelOutR.textContent = formatDbShort(data.outR);
             }
         });
-        debugLog('✓ Meter agganciati con successo!', 'SUCCESS');
-    } else {
-        debugLog('⏳ Avviso: window.__JUCE__.backend non ancora disponibile.', 'WARN');
     }
 });
