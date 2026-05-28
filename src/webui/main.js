@@ -312,11 +312,14 @@ function wireGain() {
             const norm = state.getNormalisedValue();
             const db = clampGainDb(normalisedToDb(norm, range));
 
+            debugLog(`sync() called from C++ - normalized: ${norm.toFixed(4)}, dB: ${db.toFixed(1)}`);
+
             label.textContent = db.toFixed(1) + ' dB';
 
             // Aggiorna lo slider grafico SOLO se l'utente non lo sta attivamente trascinando
             if (document.activeElement !== slider) {
                 slider.value = db.toFixed(1).replace(',', '.');
+                debugLog(`  Updated slider visual to: ${slider.value}`);
             }
         } catch (e) {
             debugLog(`✗ Error in sync: ${e.message}`, 'ERROR');
@@ -326,9 +329,16 @@ function wireGain() {
     const setGainDb = (db) => {
         try {
             const range = getGainRange(state);
+            const normalised = dbToNormalised(db, range);
+
+            debugLog(`setGainDb: User input: ${db.toFixed(1)} dB`);
+            debugLog(`  Range: [${range.start.toFixed(1)}, ${range.end.toFixed(1)}], skew: ${range.skew.toFixed(2)}`);
+            debugLog(`  Normalized value being sent to C++: ${normalised.toFixed(4)}`);
+
             // Invia il corretto valore normalizzato (0-1) calcolato in base al range reale
-            debugLog(`setGainDb: Setting value to ${db.toFixed(1)} dB`);
-            state.setNormalisedValue(dbToNormalised(db, range));
+            state.setNormalisedValue(normalised);
+
+            debugLog(`  ✓ setNormalisedValue() called`);
 
             // Aggiorna la label testuale istantaneamente per dare fluidità
             label.textContent = clampGainDb(db).toFixed(1) + ' dB';
@@ -338,8 +348,18 @@ function wireGain() {
     };
 
     try {
-        state.valueChangedEvent.addListener(sync);
-        state.propertiesChangedEvent.addListener(sync);
+        debugLog(`Adding listeners to state object...`);
+        debugLog(`  state.valueChangedEvent type: ${typeof state.valueChangedEvent}`);
+        debugLog(`  state.propertiesChangedEvent type: ${typeof state.propertiesChangedEvent}`);
+
+        state.valueChangedEvent.addListener(() => {
+            debugLog('⬅ Event: valueChangedEvent fired from C++', 'SUCCESS');
+            sync();
+        });
+        state.propertiesChangedEvent.addListener(() => {
+            debugLog('⬅ Event: propertiesChangedEvent fired from C++', 'SUCCESS');
+            sync();
+        });
         debugLog('✓ Event listeners added');
     } catch (e) {
         debugLog(`✗ Error adding event listeners: ${e.message}`, 'ERROR');
