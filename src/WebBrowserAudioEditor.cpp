@@ -178,7 +178,7 @@ std::vector<std::byte> WebBrowserAudioEditor::getWebViewFileAsBytes(const juce::
     if(zipEntry == nullptr) zipEntry = zipFile.getEntry("dist/" + filepath);
 
     if(zipEntry != nullptr) {
-        const std:unique_ptr<juce::InputStream> entryStream(zipFile.createStreamForEntry(*zipEntry));
+        const std::unique_ptr<juce::InputStream> entryStream(zipFile.createStreamForEntry(*zipEntry));
         if(entryStream != nullptr) {
             return streamToVector(*entryStream);
         }
