@@ -17,17 +17,6 @@ jobs:
       with:
         submodules: recursive
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-
-    - name: Install NPM dependencies and Build Frontend
-      shell: bash
-      run: |
-        npm install
-        npm run build
-
     - name: Reset CMake Cache (Remove build directory)
       shell: pwsh
       run: |

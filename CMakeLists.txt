@@ -58,7 +58,8 @@ if(RNBO_EDITOR_MODE STREQUAL "WEBVIEW")
     get_filename_component(PUBLIC_PATH "${WEBVIEW_FILES_SOURCE_DIR}" ABSOLUTE)
     file(ARCHIVE_CREATE
         OUTPUT "${WEBUI_ZIP_PATH}"
-        PATHS "${PUBLIC_PATH}"
+        PATHS "."
+        WORKING_DIRECTORY "${WEBVIEW_FILES_SOURCE_DIR}"
         FORMAT zip
         VERBOSE
     )
