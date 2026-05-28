@@ -28,11 +28,7 @@ static const juce::String kDevServerAddress = "http://localhost:3000/";
 //==============================================================================
 bool WebBrowserAudioEditor::SinglePageBrowser::pageAboutToLoad (const String& newURL)
 {
-
-    // Hide the webview on every navigation so emitEventIfBrowserIsVisible won't try to
-    // evaluate JS against a page that hasn't initialised window.__JUCE__ yet.
-    // pageFinishedLoading reveals it again once the page is ready.
-    setVisible (false);
+    _pageReady = false;
 
     // Allow the dev server and the JUCE resource provider root; block everything else
     // so the single-page UI can't accidentally navigate away.
@@ -56,10 +52,7 @@ bool WebBrowserAudioEditor::SinglePageBrowser::pageLoadHadNetworkError (const St
 
 void WebBrowserAudioEditor::SinglePageBrowser::pageFinishedLoading (const String& /*url*/)
 {
-    // Reveal the webview now that window.__JUCE__ is initialised. Keeping it hidden until
-    // this point prevents emitEventIfBrowserIsVisible from evaluating JS on a blank page,
-    // which would throw "undefined is not an object (evaluating 'window.__JUCE__.backend')".
-    setVisible (true);
+    _pageReady = true;
 }
 
 //==============================================================================
@@ -98,17 +91,6 @@ WebBrowserAudioEditor::WebBrowserAudioEditor (CustomAudioProcessor* const p,
     , _audioProcessor (p)
     , _rnboObject (rnboObject)
 {
-    addChildComponent (_webComponent);
-
-    // Try the dev server first. If nothing is listening on that port,
-    // pageLoadHadNetworkError fires quickly and redirects to getResourceProviderRoot().
-    _webComponent.goToURL (kDevServerAddress);
-    //_webComponent.goToURL(WebBrowserComponent::getResourceProviderRoot());
-
-    setResizable (true, true);
-    setResizeLimits (260, 300, 720, 900);
-    setSize (360, 420);
-
     try
     {
         _gainAttachment = std::make_unique<WebSliderParameterAttachment> (
@@ -118,6 +100,17 @@ WebBrowserAudioEditor::WebBrowserAudioEditor (CustomAudioProcessor* const p,
     {
         DBG ("WebBrowserAudioEditor: parameter attach failed: " + String (e.what()));
     }
+
+    addAndMakeVisible (_webComponent);
+
+    // Try the dev server first. If nothing is listening on that port,
+    // pageLoadHadNetworkError fires quickly and redirects to getResourceProviderRoot().
+    _webComponent.goToURL (kDevServerAddress);
+    //_webComponent.goToURL(WebBrowserComponent::getResourceProviderRoot());
+
+    setResizable (true, true);
+    setResizeLimits (260, 300, 720, 900);
+    setSize (360, 420);
 
     startTimerHz (60);
 }
@@ -145,6 +138,9 @@ void WebBrowserAudioEditor::timerCallback()
 
 void WebBrowserAudioEditor::sendMeterLevelsToWebView()
 {
+    if (! _webComponent.isPageReady())
+        return;
+
     const auto& levels = _audioProcessor->meterLevels;
 
     DynamicObject::Ptr payload = new DynamicObject();

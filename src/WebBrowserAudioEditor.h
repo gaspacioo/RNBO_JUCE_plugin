@@ -36,9 +36,11 @@ private:
         bool pageAboutToLoad (const String& newURL) override;
         bool pageLoadHadNetworkError (const String& errorInfo) override;
         void pageFinishedLoading (const String& url) override;
+        bool isPageReady() const { return _pageReady; }
 
     private:
         bool _devServerFailed = false;
+        bool _pageReady = false;
     };
 
     SinglePageBrowser _webComponent {

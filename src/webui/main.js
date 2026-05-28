@@ -1,5 +1,4 @@
-// Importazione ufficiale tramite il percorso relativo corretto per la tua struttura
-import * as Juce from "../../thirdparty/juce/modules/juce_gui_extra/native/javascript/index.js";
+import * as Juce from "juce-framework-frontend";
 
 // ===== DEBUG WINDOW =====
 const DEBUG_ENABLED = true;

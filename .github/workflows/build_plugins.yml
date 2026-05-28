@@ -30,6 +30,20 @@ jobs:
     - name: Set up MSVC (Windows)
       uses: ilammy/msvc-dev-cmd@v1
 
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: npm
+        cache-dependency-path: src/webui/package-lock.json
+
+    - name: Build Web UI
+      shell: bash
+      working-directory: src/webui
+      run: |
+        npm ci
+        npm run build
+
     - name: Install WebView2 (Windows)
       shell: bash
       run: |
