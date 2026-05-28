@@ -70,6 +70,8 @@ function debugLog(msg, level = 'INFO') {
             let color = '#00ff00';
             if (log.includes('ERROR')) color = '#ff0000';
             else if (log.includes('WARN')) color = '#ffff00';
+            else if (log.includes('SUCCESS') || log.includes('✓')) color = '#00ff00';
+            else if (log.includes('⬅')) color = '#00ddff';
             return `<div style="color: ${color};">${log}</div>`;
         }).join('');
         debugContent.parentElement.scrollTop = debugContent.parentElement.scrollHeight;
@@ -275,6 +277,12 @@ function parseMeterPayload(data) {
 // AGGIORNATA: Gestisce la mappatura in dB, risolve il feedback loop e corregge la localizzazione dello slider
 function wireGain() {
     debugLog('wireGain: Starting...');
+
+    // Detect platform
+    const platform = navigator.platform.toLowerCase();
+    const isWindows = platform.includes('win');
+    const isMac = platform.includes('mac');
+    debugLog(`Platform: ${platform} (Windows: ${isWindows}, Mac: ${isMac})`);
 
     const slider = document.getElementById('gainSlider');
     const label = document.getElementById('gainValue');
@@ -498,20 +506,9 @@ async function initAsync() {
 
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
-        // Prova prima il percorso sincrono
-        init();
-
-        // Se __JUCE__ non è disponibile, aspetta
-        if (typeof window.__JUCE__ === 'undefined') {
-            initAsync();
-        }
+        initAsync();
     });
 } else {
-    // Prova prima il percorso sincrono
-    init();
-
-    // Se __JUCE__ non è disponibile, aspetta
-    if (typeof window.__JUCE__ === 'undefined') {
-        initAsync();
-    }
+    // Se il documento è già pronto, esegui subito
+    initAsync();
 }
