@@ -17,6 +17,24 @@ jobs:
       with:
         submodules: recursive
 
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install NPM dependencies and Build Frontend
+      shell: bash
+      run: |
+        npm install
+        npm run build
+
+    - name: Reset CMake Cache (Remove build directory)
+      shell: pwsh
+      run: |
+        if (Test-Path build) {
+            Remove-Item -Recurse -Force build
+        }
+
     - name: Configure CMake
       uses: lukka/get-cmake@latest
 
@@ -43,7 +61,7 @@ jobs:
       with:
         name: VST3-Windows
         path: build/RNBOAudioPlugin_artefacts/Release/VST3/
-
+        
     - name: Upload Standalone App Artifact (Windows)
       uses: actions/upload-artifact@v4
       with:

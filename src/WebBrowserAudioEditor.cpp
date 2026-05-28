@@ -160,31 +160,49 @@ void WebBrowserAudioEditor::sendMeterLevelsToWebView()
     _webComponent.emitEventIfBrowserIsVisible ("meterLevels", var (payload.get()));
 }
 
+std::vector<std::byte> streamToVector (juce::InputStream& stream) {
+
+    const auto sizeInBytes = static_cast<size_t> (stream.getTotalLength());
+    std::vector<std::byte> result (sizeInBytes);
+    stream.setPosition (0);
+    stream.read (result.data(), result.size());
+    return result;
+}
+
+std::vector<std::byte> WebBrowserAudioEditor::getWebViewFileAsBytes(const juce::String& filepath) {
+
+    juce::MemoryInputStream zipStream(RNBOUIData::web_ui_zip, RNBOUIData::web_ui_zipSize, false);
+    juce::ZipFile zipFile(zipStream);
+
+    auto* zipEntry = zipFile.getEntry(filepath);
+    if(zipEntry == nullptr) zipEntry = zipFile.getEntry("dist/" + filepath);
+
+    if(zipEntry != nullptr) {
+        const std:unique_ptr<juce::InputStream> entryStream(zipFile.createStreamForEntry(*zipEntry));
+        if(entryStream != nullptr) {
+            return streamToVector(*entryStream);
+        }
+    }
+    return {};
+}
+
 std::optional<WebBrowserComponent::Resource>
-WebBrowserAudioEditor::getResource (const String& url)
-{
+WebBrowserAudioEditor::getResource (const String& url) {
+    
     // Map "/" or "" to index.html; strip any leading slash for other paths.
     const auto filename = (url == "/" || url.isEmpty())
                             ? String ("index.html")
                             : url.fromFirstOccurrenceOf ("/", false, false);
 
-    const auto ext  = filename.fromLastOccurrenceOf (".", false, false).toLowerCase();
-    const auto mime = getMimeForExtension (ext);
+    const auto resource = getWebViewFileAsBytes(filename);
 
-    // Production: serve from binary data compiled into the binary.
-    // Mangle the filename the same way juce_add_binary_data does (non-alphanumeric → '_').
-    String resourceName;
-    for (auto c : filename)
-        resourceName += (CharacterFunctions::isLetterOrDigit (c) || c == '_') ? c : juce_wchar ('_');
+    if(!resource.empty()) {
+        const auto extension  = filename.fromLastOccurrenceOf (".", false, false).toLowerCase();
+        const auto mime = getMimeForExtension (extension);
 
-    int dataSize = 0;
-    const char* data = RNBOUIData::getNamedResource (resourceName.toRawUTF8(), dataSize);
-
-    if (data != nullptr)
-    {
-        const auto* begin = reinterpret_cast<const std::byte*> (data);
-        return WebBrowserComponent::Resource { std::vector<std::byte> (begin, begin + dataSize), mime };
+        return juce::WebBrowserComponent::Resource {
+            std::move(resource), mime 
+        };
     }
-
     return std::nullopt;
 }

@@ -19,6 +19,8 @@ public:
 private:
     void timerCallback() override;
 
+    std::vector<std::byte> getWebViewFileAsBytes (const juce::String& filepath);
+
     std::optional<WebBrowserComponent::Resource> getResource (const String& url);
 
     void sendMeterLevelsToWebView();
@@ -42,9 +44,9 @@ private:
     SinglePageBrowser _webComponent {
         WebBrowserComponent::Options{}
             .withBackend (WebBrowserComponent::Options::Backend::webview2)
-            .withWinWebView2Options (WebBrowserComponent::Options::WinWebView2{}
-                .withUserDataFolder (File::getSpecialLocation (
-                    File::SpecialLocationType::tempDirectory)))
+            .withWinWebView2Options (juce::WebBrowserComponent::Options::WinWebView2{}
+                .withUserDataFolder (juce::File::getSpecialLocation (
+                    juce::File::SpecialLocationType::tempDirectory)))
             .withNativeIntegrationEnabled()
             .withOptionsFrom (_gainRelay)
             .withKeepPageLoadedWhenBrowserIsHidden()

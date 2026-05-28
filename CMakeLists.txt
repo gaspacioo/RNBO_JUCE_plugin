@@ -51,22 +51,31 @@ add_subdirectory(
 
 # Compile web UI files into the binary — only needed for the WEBVIEW editor.
 if(RNBO_EDITOR_MODE STREQUAL "WEBVIEW")
+
+    set(WEBVIEW_FILES_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/src/webui/dist")
+    set(WEBUI_ZIP_PATH "${CMAKE_CURRENT_BINARY_DIR}/web_ui.zip")
+
+    get_filename_component(PUBLIC_PATH "${WEBVIEW_FILES_SOURCE_DIR}" ABSOLUTE)
+    file(ARCHIVE_CREATE
+        OUTPUT "${WEBUI_ZIP_PATH}"
+        PATHS "${PUBLIC_PATH}"
+        FORMAT zip
+        VERBOSE
+    )
+
     juce_add_binary_data(RNBOUIData
         NAMESPACE RNBOUIData
         SOURCES
-        ${CMAKE_CURRENT_LIST_DIR}/src/webui/dist/index.html
-        ${CMAKE_CURRENT_LIST_DIR}/src/webui/dist/index.js
-        ${CMAKE_CURRENT_LIST_DIR}/src/webui/dist/index.css
+        "${WEBUI_ZIP_PATH}"
     )
+
 endif()
 
 # Or, instead, use Conan to get JUCE, should speed up clean builds
 # include(${RNBO_CPP_DIR}/cmake/RNBOJuce.cmake)
 
-
 # Optionally, enable ccache, should speed up builds
 # include(${RNBO_CPP_DIR}/cmake/CCache.cmake)
-
 
 # Comment out this line if you really want to emulate MIDI CC with Audio Parameters.
 # See the discussion here: https://forums.steinberg.net/t/vst3-and-midi-cc-pitfall/201879/11
