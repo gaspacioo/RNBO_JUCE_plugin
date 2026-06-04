@@ -89,12 +89,15 @@ rnbomatic* getTopLevelPatcher() {
 
 void cancelClockEvents()
 {
-    getEngine()->flushClockEvents(this, 770648402, false);
+    getEngine()->flushClockEvents(this, 879365773, false);
+    getEngine()->flushClockEvents(this, 1033938262, false);
     getEngine()->flushClockEvents(this, 1220262738, false);
-    getEngine()->flushClockEvents(this, -368915887, false);
-    getEngine()->flushClockEvents(this, -1508480176, false);
+    getEngine()->flushClockEvents(this, 2018930062, false);
+    getEngine()->flushClockEvents(this, -2121464745, false);
     getEngine()->flushClockEvents(this, 848255507, false);
-    getEngine()->flushClockEvents(this, 1646922831, false);
+    getEngine()->flushClockEvents(this, -1136472945, false);
+    getEngine()->flushClockEvents(this, 3091344, false);
+    getEngine()->flushClockEvents(this, 1142655633, false);
     getEngine()->flushClockEvents(this, -281953904, false);
 }
 
@@ -238,6 +241,10 @@ SampleIndex currentsampletime() {
     return this->audioProcessSampleCount + this->sampleOffsetIntoNextAudioBuffer;
 }
 
+inline number safediv(number num, number denom) {
+    return (denom == 0.0 ? 0.0 : num / denom);
+}
+
 MillisecondTime sampstoms(number samps) {
     return samps * 1000 / this->sr;
 }
@@ -269,31 +276,8 @@ void process(
     this->selector_01_perform(this->selector_01_onoff, in1, this->signals[0], this->signals[1], n);
     this->dspexpr_07_perform(this->signals[1], this->dspexpr_07_in2, this->signals[0], n);
 
-    this->average_rms_tilde_01_perform(
-        in1,
-        this->average_rms_tilde_01_windowSize,
-        this->average_rms_tilde_01_reset,
-        this->signals[1],
-        n
-    );
-
-    this->snapshot_01_perform(this->signals[1], n);
-    this->delaytilde_02_perform(this->delaytilde_02_delay, in2, this->signals[1], n);
-    this->selector_02_perform(this->selector_02_onoff, in2, this->signals[1], this->signals[2], n);
-    this->dspexpr_10_perform(this->signals[2], this->dspexpr_10_in2, this->signals[1], n);
-    this->dspexpr_09_perform(this->signals[0], this->signals[1], this->signals[2], n);
-    this->dspexpr_13_perform(this->signals[2], this->dspexpr_13_in2, this->signals[3], n);
-    this->dspexpr_12_perform(this->signals[3], this->dspexpr_12_in2, this->signals[2], n);
-    this->dspexpr_06_perform(this->signals[0], this->signals[1], this->signals[3], n);
-    this->dspexpr_04_perform(this->signals[3], this->dspexpr_04_in2, this->signals[1], n);
-    this->dspexpr_03_perform(this->signals[1], this->dspexpr_03_in2, this->signals[3], n);
-    this->dspexpr_11_perform(this->signals[3], this->signals[2], this->signals[1], n);
-    this->dspexpr_14_perform(this->signals[1], this->dspexpr_14_in2, this->signals[0], n);
-    this->dspexpr_02_perform(this->signals[3], this->signals[2], this->signals[1], n);
-    this->dspexpr_01_perform(this->signals[1], this->dspexpr_01_in2, this->signals[2], n);
-
     this->average_rms_tilde_02_perform(
-        in2,
+        in1,
         this->average_rms_tilde_02_windowSize,
         this->average_rms_tilde_02_reset,
         this->signals[1],
@@ -301,29 +285,80 @@ void process(
     );
 
     this->snapshot_02_perform(this->signals[1], n);
-    this->linetilde_01_perform(this->signals[1], n);
-    this->dspexpr_08_perform(this->signals[0], this->signals[1], out2, n);
+    this->delaytilde_02_perform(this->delaytilde_02_delay, in2, this->signals[1], n);
+    this->selector_02_perform(this->selector_02_onoff, in2, this->signals[1], this->signals[2], n);
+    this->dspexpr_11_perform(this->signals[2], this->dspexpr_11_in2, this->signals[1], n);
+    this->dspexpr_10_perform(this->signals[0], this->signals[1], this->signals[2], n);
+    this->dspexpr_14_perform(this->signals[2], this->dspexpr_14_in2, this->signals[3], n);
+    this->dspexpr_13_perform(this->signals[3], this->dspexpr_13_in2, this->signals[2], n);
+    this->dspexpr_06_perform(this->signals[0], this->signals[1], this->signals[3], n);
+    this->dspexpr_03_perform(this->signals[3], this->dspexpr_03_in2, this->signals[1], n);
+    this->dspexpr_02_perform(this->signals[1], this->dspexpr_02_in2, this->signals[3], n);
+    this->dspexpr_12_perform(this->signals[3], this->signals[2], this->signals[1], n);
+    this->dspexpr_09_perform(this->signals[1], this->dspexpr_09_in2, this->signals[0], n);
+    this->dspexpr_01_perform(this->signals[3], this->signals[2], this->signals[1], n);
+    this->dspexpr_04_perform(this->signals[1], this->dspexpr_04_in2, this->signals[2], n);
 
     this->average_rms_tilde_04_perform(
-        out2,
+        in2,
         this->average_rms_tilde_04_windowSize,
         this->average_rms_tilde_04_reset,
-        this->signals[0],
-        n
-    );
-
-    this->snapshot_04_perform(this->signals[0], n);
-    this->dspexpr_05_perform(this->signals[2], this->signals[1], out1, n);
-
-    this->average_rms_tilde_03_perform(
-        out1,
-        this->average_rms_tilde_03_windowSize,
-        this->average_rms_tilde_03_reset,
         this->signals[1],
         n
     );
 
-    this->snapshot_03_perform(this->signals[1], n);
+    this->snapshot_04_perform(this->signals[1], n);
+    this->linetilde_01_perform(this->signals[1], n);
+    this->dspexpr_08_perform(this->signals[0], this->signals[1], this->signals[3], n);
+
+    this->average_rms_tilde_03_perform(
+        this->signals[3],
+        this->average_rms_tilde_03_windowSize,
+        this->average_rms_tilde_03_reset,
+        this->signals[0],
+        n
+    );
+
+    this->snapshot_03_perform(this->signals[0], n);
+    this->signalforwarder_01_perform(this->signals[3], out2, n);
+    this->dspexpr_05_perform(this->signals[2], this->signals[1], this->signals[4], n);
+    this->dspexpr_20_perform(this->signals[4], this->signals[3], this->signals[1], n);
+    this->snapshot_07_perform(this->signals[1], n);
+    this->dspexpr_19_perform(this->signals[4], this->signals[3], this->signals[1], n);
+    this->snapshot_06_perform(this->signals[1], n);
+    this->dspexpr_15_perform(this->signals[4], this->signals[3], this->signals[1], n);
+
+    this->slide_tilde_01_perform(
+        this->signals[1],
+        this->slide_tilde_01_up,
+        this->slide_tilde_01_down,
+        this->signals[3],
+        n
+    );
+
+    this->average_rms_tilde_01_perform(
+        this->signals[4],
+        this->average_rms_tilde_01_windowSize,
+        this->average_rms_tilde_01_reset,
+        this->signals[1],
+        n
+    );
+
+    this->snapshot_01_perform(this->signals[1], n);
+    this->dspexpr_18_perform(this->signals[1], this->signals[0], this->signals[2], n);
+    this->dspexpr_17_perform(this->signals[2], this->dspexpr_17_in2, this->signals[0], n);
+
+    this->slide_tilde_02_perform(
+        this->signals[0],
+        this->slide_tilde_02_up,
+        this->slide_tilde_02_down,
+        this->signals[2],
+        n
+    );
+
+    this->dspexpr_16_perform(this->signals[3], this->signals[2], this->signals[0], n);
+    this->snapshot_05_perform(this->signals[0], n);
+    this->signalforwarder_02_perform(this->signals[4], out1, n);
     this->stackprotect_perform(n);
     this->globaltransport_advance();
     this->audioProcessSampleCount += this->vs;
@@ -333,7 +368,7 @@ void prepareToProcess(number sampleRate, Index maxBlockSize, bool force) {
     if (this->maxvs < maxBlockSize || !this->didAllocateSignals) {
         Index i;
 
-        for (i = 0; i < 4; i++) {
+        for (i = 0; i < 5; i++) {
             this->signals[i] = resizeSignal(this->signals[i], this->maxvs, maxBlockSize);
         }
 
@@ -356,11 +391,11 @@ void prepareToProcess(number sampleRate, Index maxBlockSize, bool force) {
     }
 
     this->delaytilde_01_dspsetup(forceDSPSetup);
-    this->average_rms_tilde_01_dspsetup(forceDSPSetup);
-    this->delaytilde_02_dspsetup(forceDSPSetup);
     this->average_rms_tilde_02_dspsetup(forceDSPSetup);
+    this->delaytilde_02_dspsetup(forceDSPSetup);
     this->average_rms_tilde_04_dspsetup(forceDSPSetup);
     this->average_rms_tilde_03_dspsetup(forceDSPSetup);
+    this->average_rms_tilde_01_dspsetup(forceDSPSetup);
     this->globaltransport_dspsetup(forceDSPSetup);
 
     if (sampleRateChanged)
@@ -398,22 +433,22 @@ DataRef* getDataRef(DataRefIndex index)  {
         }
     case 2:
         {
-        return addressOf(this->delaytilde_01_del_bufferobj);
+        return addressOf(this->average_rms_tilde_03_av_bufferobj);
         break;
         }
     case 3:
         {
-        return addressOf(this->delaytilde_02_del_bufferobj);
+        return addressOf(this->average_rms_tilde_04_av_bufferobj);
         break;
         }
     case 4:
         {
-        return addressOf(this->average_rms_tilde_03_av_bufferobj);
+        return addressOf(this->delaytilde_01_del_bufferobj);
         break;
         }
     case 5:
         {
-        return addressOf(this->average_rms_tilde_04_av_bufferobj);
+        return addressOf(this->delaytilde_02_del_bufferobj);
         break;
         }
     default:
@@ -445,43 +480,43 @@ void processDataViewUpdate(DataRefIndex index, MillisecondTime time) {
     }
 
     if (index == 2) {
-        this->delaytilde_01_del_buffer = new Float64Buffer(this->delaytilde_01_del_bufferobj);
-    }
-
-    if (index == 3) {
-        this->delaytilde_02_del_buffer = new Float64Buffer(this->delaytilde_02_del_bufferobj);
-    }
-
-    if (index == 4) {
         this->average_rms_tilde_03_av_buffer = new Float64Buffer(this->average_rms_tilde_03_av_bufferobj);
     }
 
-    if (index == 5) {
+    if (index == 3) {
         this->average_rms_tilde_04_av_buffer = new Float64Buffer(this->average_rms_tilde_04_av_bufferobj);
+    }
+
+    if (index == 4) {
+        this->delaytilde_01_del_buffer = new Float64Buffer(this->delaytilde_01_del_bufferobj);
+    }
+
+    if (index == 5) {
+        this->delaytilde_02_del_buffer = new Float64Buffer(this->delaytilde_02_del_bufferobj);
     }
 }
 
 void initialize() {
     this->average_rms_tilde_01_av_bufferobj = initDataRef("average_rms_tilde_01_av_bufferobj", true, nullptr, "buffer~");
     this->average_rms_tilde_02_av_bufferobj = initDataRef("average_rms_tilde_02_av_bufferobj", true, nullptr, "buffer~");
-    this->delaytilde_01_del_bufferobj = initDataRef("delaytilde_01_del_bufferobj", true, nullptr, "buffer~");
-    this->delaytilde_02_del_bufferobj = initDataRef("delaytilde_02_del_bufferobj", true, nullptr, "buffer~");
     this->average_rms_tilde_03_av_bufferobj = initDataRef("average_rms_tilde_03_av_bufferobj", true, nullptr, "buffer~");
     this->average_rms_tilde_04_av_bufferobj = initDataRef("average_rms_tilde_04_av_bufferobj", true, nullptr, "buffer~");
+    this->delaytilde_01_del_bufferobj = initDataRef("delaytilde_01_del_bufferobj", true, nullptr, "buffer~");
+    this->delaytilde_02_del_bufferobj = initDataRef("delaytilde_02_del_bufferobj", true, nullptr, "buffer~");
     this->assign_defaults();
     this->setState();
     this->average_rms_tilde_01_av_bufferobj->setIndex(0);
     this->average_rms_tilde_01_av_buffer = new Float64Buffer(this->average_rms_tilde_01_av_bufferobj);
     this->average_rms_tilde_02_av_bufferobj->setIndex(1);
     this->average_rms_tilde_02_av_buffer = new Float64Buffer(this->average_rms_tilde_02_av_bufferobj);
-    this->delaytilde_01_del_bufferobj->setIndex(2);
-    this->delaytilde_01_del_buffer = new Float64Buffer(this->delaytilde_01_del_bufferobj);
-    this->delaytilde_02_del_bufferobj->setIndex(3);
-    this->delaytilde_02_del_buffer = new Float64Buffer(this->delaytilde_02_del_bufferobj);
-    this->average_rms_tilde_03_av_bufferobj->setIndex(4);
+    this->average_rms_tilde_03_av_bufferobj->setIndex(2);
     this->average_rms_tilde_03_av_buffer = new Float64Buffer(this->average_rms_tilde_03_av_bufferobj);
-    this->average_rms_tilde_04_av_bufferobj->setIndex(5);
+    this->average_rms_tilde_04_av_bufferobj->setIndex(3);
     this->average_rms_tilde_04_av_buffer = new Float64Buffer(this->average_rms_tilde_04_av_bufferobj);
+    this->delaytilde_01_del_bufferobj->setIndex(4);
+    this->delaytilde_01_del_buffer = new Float64Buffer(this->delaytilde_01_del_bufferobj);
+    this->delaytilde_02_del_bufferobj->setIndex(5);
+    this->delaytilde_02_del_buffer = new Float64Buffer(this->delaytilde_02_del_bufferobj);
     this->initializeObjects();
     this->allocateDataRefs();
     this->startup();
@@ -1072,9 +1107,14 @@ void processClockEvent(MillisecondTime time, ClockId index, bool hasValue, Param
     this->updateTime(time);
 
     switch (index) {
-    case 770648402:
+    case 879365773:
         {
         this->snapshot_01_out_set(value);
+        break;
+        }
+    case 1033938262:
+        {
+        this->snapshot_02_out_set(value);
         break;
         }
     case 1220262738:
@@ -1082,14 +1122,14 @@ void processClockEvent(MillisecondTime time, ClockId index, bool hasValue, Param
         this->line_01_tick_set(value);
         break;
         }
-    case -368915887:
-        {
-        this->snapshot_02_out_set(value);
-        break;
-        }
-    case -1508480176:
+    case 2018930062:
         {
         this->snapshot_03_out_set(value);
+        break;
+        }
+    case -2121464745:
+        {
+        this->snapshot_04_out_set(value);
         break;
         }
     case 848255507:
@@ -1097,9 +1137,19 @@ void processClockEvent(MillisecondTime time, ClockId index, bool hasValue, Param
         this->line_02_tick_set(value);
         break;
         }
-    case 1646922831:
+    case -1136472945:
         {
-        this->snapshot_04_out_set(value);
+        this->snapshot_05_out_set(value);
+        break;
+        }
+    case 3091344:
+        {
+        this->snapshot_06_out_set(value);
+        break;
+        }
+    case 1142655633:
+        {
+        this->snapshot_07_out_set(value);
         break;
         }
     case -281953904:
@@ -1130,29 +1180,41 @@ void processBangMessage(MessageTag , MessageTag , MillisecondTime ) {}
 
 MessageTagInfo resolveTag(MessageTag tag) const {
     switch (tag) {
-    case TAG("in_rms_L"):
+    case TAG("out_rms_L"):
         {
-        return "in_rms_L";
+        return "out_rms_L";
         }
     case TAG(""):
         {
         return "";
         }
-    case TAG("in_rms_R"):
+    case TAG("in_rms_L"):
         {
-        return "in_rms_R";
-        }
-    case TAG("out_rms_L"):
-        {
-        return "out_rms_L";
+        return "in_rms_L";
         }
     case TAG("out_rms_R"):
         {
         return "out_rms_R";
         }
+    case TAG("in_rms_R"):
+        {
+        return "in_rms_R";
+        }
+    case TAG("correlation_value"):
+        {
+        return "correlation_value";
+        }
     case TAG("delay_time"):
         {
         return "delay_time";
+        }
+    case TAG("scopeY"):
+        {
+        return "scopeY";
+        }
+    case TAG("scopeX"):
+        {
+        return "scopeX";
         }
     }
 
@@ -1160,7 +1222,7 @@ MessageTagInfo resolveTag(MessageTag tag) const {
 }
 
 MessageIndex getNumMessages() const {
-    return 5;
+    return 8;
 }
 
 const MessageInfo& getMessageInfo(MessageIndex index) const {
@@ -1168,7 +1230,7 @@ const MessageInfo& getMessageInfo(MessageIndex index) const {
     case 0:
         {
         static const MessageInfo r0 = {
-            "in_rms_L",
+            "out_rms_L",
             Outport
         };
 
@@ -1177,7 +1239,7 @@ const MessageInfo& getMessageInfo(MessageIndex index) const {
     case 1:
         {
         static const MessageInfo r1 = {
-            "in_rms_R",
+            "in_rms_L",
             Outport
         };
 
@@ -1186,7 +1248,7 @@ const MessageInfo& getMessageInfo(MessageIndex index) const {
     case 2:
         {
         static const MessageInfo r2 = {
-            "out_rms_L",
+            "out_rms_R",
             Outport
         };
 
@@ -1195,7 +1257,7 @@ const MessageInfo& getMessageInfo(MessageIndex index) const {
     case 3:
         {
         static const MessageInfo r3 = {
-            "out_rms_R",
+            "in_rms_R",
             Outport
         };
 
@@ -1204,11 +1266,38 @@ const MessageInfo& getMessageInfo(MessageIndex index) const {
     case 4:
         {
         static const MessageInfo r4 = {
-            "delay_time",
+            "correlation_value",
             Outport
         };
 
         return r4;
+        }
+    case 5:
+        {
+        static const MessageInfo r5 = {
+            "delay_time",
+            Outport
+        };
+
+        return r5;
+        }
+    case 6:
+        {
+        static const MessageInfo r6 = {
+            "scopeY",
+            Outport
+        };
+
+        return r6;
+        }
+    case 7:
+        {
+        static const MessageInfo r7 = {
+            "scopeX",
+            Outport
+        };
+
+        return r7;
         }
     }
 
@@ -1227,7 +1316,7 @@ void param_01_value_set(number v) {
         this->param_01_lastValue = this->param_01_value;
     }
 
-    this->expr_02_in1_set(v);
+    this->expr_03_in1_set(v);
 }
 
 void param_02_value_set(number v) {
@@ -1253,7 +1342,7 @@ void param_03_value_set(number v) {
         this->param_03_lastValue = this->param_03_value;
     }
 
-    this->expr_08_in1_set(v);
+    this->expr_09_in1_set(v);
 }
 
 void param_04_value_set(number v) {
@@ -1266,7 +1355,7 @@ void param_04_value_set(number v) {
         this->param_04_lastValue = this->param_04_value;
     }
 
-    this->expr_09_in1_set(v);
+    this->expr_10_in1_set(v);
 }
 
 void param_05_value_set(number v) {
@@ -1327,6 +1416,11 @@ void snapshot_01_out_set(number v) {
     this->expr_01_in1_set(v);
 }
 
+void snapshot_02_out_set(number v) {
+    this->snapshot_02_out = v;
+    this->expr_02_in1_set(v);
+}
+
 void line_01_tick_set(number v) {
     this->line_01_output_set(v);
 
@@ -1339,14 +1433,14 @@ void line_01_tick_set(number v) {
     }
 }
 
-void snapshot_02_out_set(number v) {
-    this->snapshot_02_out = v;
-    this->expr_03_in1_set(v);
-}
-
 void snapshot_03_out_set(number v) {
     this->snapshot_03_out = v;
-    this->expr_06_in1_set(v);
+    this->expr_04_in1_set(v);
+}
+
+void snapshot_04_out_set(number v) {
+    this->snapshot_04_out = v;
+    this->expr_05_in1_set(v);
 }
 
 void line_02_tick_set(number v) {
@@ -1361,9 +1455,19 @@ void line_02_tick_set(number v) {
     }
 }
 
-void snapshot_04_out_set(number v) {
-    this->snapshot_04_out = v;
-    this->expr_10_in1_set(v);
+void snapshot_05_out_set(number v) {
+    this->snapshot_05_out = v;
+    this->outport_05_input_number_set(v);
+}
+
+void snapshot_06_out_set(number v) {
+    this->snapshot_06_out = v;
+    this->outport_07_input_number_set(v);
+}
+
+void snapshot_07_out_set(number v) {
+    this->snapshot_07_out = v;
+    this->outport_08_input_number_set(v);
 }
 
 void linetilde_01_target_bang() {}
@@ -1415,31 +1519,13 @@ void allocateDataRefs() {
         this->getEngine()->sendDataRefUpdated(1);
     }
 
-    this->delaytilde_01_del_buffer = this->delaytilde_01_del_buffer->allocateIfNeeded();
-
-    if (this->delaytilde_01_del_bufferobj->hasRequestedSize()) {
-        if (this->delaytilde_01_del_bufferobj->wantsFill())
-            this->zeroDataRef(this->delaytilde_01_del_bufferobj);
-
-        this->getEngine()->sendDataRefUpdated(2);
-    }
-
-    this->delaytilde_02_del_buffer = this->delaytilde_02_del_buffer->allocateIfNeeded();
-
-    if (this->delaytilde_02_del_bufferobj->hasRequestedSize()) {
-        if (this->delaytilde_02_del_bufferobj->wantsFill())
-            this->zeroDataRef(this->delaytilde_02_del_bufferobj);
-
-        this->getEngine()->sendDataRefUpdated(3);
-    }
-
     this->average_rms_tilde_03_av_buffer = this->average_rms_tilde_03_av_buffer->allocateIfNeeded();
 
     if (this->average_rms_tilde_03_av_bufferobj->hasRequestedSize()) {
         if (this->average_rms_tilde_03_av_bufferobj->wantsFill())
             this->zeroDataRef(this->average_rms_tilde_03_av_bufferobj);
 
-        this->getEngine()->sendDataRefUpdated(4);
+        this->getEngine()->sendDataRefUpdated(2);
     }
 
     this->average_rms_tilde_04_av_buffer = this->average_rms_tilde_04_av_buffer->allocateIfNeeded();
@@ -1448,6 +1534,24 @@ void allocateDataRefs() {
         if (this->average_rms_tilde_04_av_bufferobj->wantsFill())
             this->zeroDataRef(this->average_rms_tilde_04_av_bufferobj);
 
+        this->getEngine()->sendDataRefUpdated(3);
+    }
+
+    this->delaytilde_01_del_buffer = this->delaytilde_01_del_buffer->allocateIfNeeded();
+
+    if (this->delaytilde_01_del_bufferobj->hasRequestedSize()) {
+        if (this->delaytilde_01_del_bufferobj->wantsFill())
+            this->zeroDataRef(this->delaytilde_01_del_bufferobj);
+
+        this->getEngine()->sendDataRefUpdated(4);
+    }
+
+    this->delaytilde_02_del_buffer = this->delaytilde_02_del_buffer->allocateIfNeeded();
+
+    if (this->delaytilde_02_del_bufferobj->hasRequestedSize()) {
+        if (this->delaytilde_02_del_bufferobj->wantsFill())
+            this->zeroDataRef(this->delaytilde_02_del_bufferobj);
+
         this->getEngine()->sendDataRefUpdated(5);
     }
 }
@@ -1455,10 +1559,10 @@ void allocateDataRefs() {
 void initializeObjects() {
     this->average_rms_tilde_01_av_init();
     this->average_rms_tilde_02_av_init();
-    this->delaytilde_01_del_init();
-    this->delaytilde_02_del_init();
     this->average_rms_tilde_03_av_init();
     this->average_rms_tilde_04_av_init();
+    this->delaytilde_01_del_init();
+    this->delaytilde_02_del_init();
 }
 
 void sendOutlet(OutletIndex index, ParameterValue value) {
@@ -1520,23 +1624,23 @@ void line_01_time_set(number v) {
     this->line_01_time = v;
 }
 
-void dspexpr_03_in2_set(number v) {
-    this->dspexpr_03_in2 = v;
+void dspexpr_02_in2_set(number v) {
+    this->dspexpr_02_in2 = v;
 }
 
-void expr_05_out1_set(number v) {
-    this->expr_05_out1 = v;
-    this->dspexpr_03_in2_set(this->expr_05_out1);
+void expr_07_out1_set(number v) {
+    this->expr_07_out1 = v;
+    this->dspexpr_02_in2_set(this->expr_07_out1);
 }
 
-void expr_05_in1_set(number in1) {
-    this->expr_05_in1 = in1;
-    this->expr_05_out1_set(this->expr_05_in1 * this->expr_05_in2);//#map:*_obj-54:1
+void expr_07_in1_set(number in1) {
+    this->expr_07_in1 = in1;
+    this->expr_07_out1_set(this->expr_07_in1 * this->expr_07_in2);//#map:*_obj-54:1
 }
 
 void line_01_output_set(number v) {
     this->line_01_output = v;
-    this->expr_05_in1_set(v);
+    this->expr_07_in1_set(v);
 }
 
 void line_01_stop_bang() {
@@ -1598,18 +1702,18 @@ void line_01_target_set(const list& v) {
     }
 }
 
-void expr_02_out1_set(number v) {
-    this->expr_02_out1 = v;
+void expr_03_out1_set(number v) {
+    this->expr_03_out1 = v;
 
     {
-        list converted = {this->expr_02_out1};
+        list converted = {this->expr_03_out1};
         this->line_01_target_set(converted);
     }
 }
 
-void expr_02_in1_set(number in1) {
-    this->expr_02_in1 = in1;
-    this->expr_02_out1_set(rnbo_pow(10, this->expr_02_in1 * 0.05));//#map:dbtoa_obj-42:1
+void expr_03_in1_set(number in1) {
+    this->expr_03_in1 = in1;
+    this->expr_03_out1_set(rnbo_pow(10, this->expr_03_in1 * 0.05));//#map:dbtoa_obj-42:1
 }
 
 number param_02_value_constrain(number v) const {
@@ -1625,22 +1729,22 @@ number param_02_value_constrain(number v) const {
     return v;
 }
 
-void expr_05_in2_set(number v) {
-    this->expr_05_in2 = v;
+void expr_07_in2_set(number v) {
+    this->expr_07_in2 = v;
 }
 
-void expr_04_out1_set(number v) {
-    this->expr_04_out1 = v;
-    this->expr_05_in2_set(this->expr_04_out1);
+void expr_06_out1_set(number v) {
+    this->expr_06_out1 = v;
+    this->expr_07_in2_set(this->expr_06_out1);
 }
 
-void expr_04_$in1_set(number $in1) {
-    this->expr_04_$in1 = $in1;
-    this->expr_04_out1_set(1 - this->expr_04_$in1);//#map:expr_obj-53:1
+void expr_06_$in1_set(number $in1) {
+    this->expr_06_$in1 = $in1;
+    this->expr_06_out1_set(1 - this->expr_06_$in1);//#map:expr_obj-53:1
 }
 
 void trigger_01_out2_set(number v) {
-    this->expr_04_$in1_set(v);
+    this->expr_06_$in1_set(v);
 }
 
 void param_01_value_bang() {
@@ -1652,7 +1756,7 @@ void param_01_value_bang() {
         this->param_01_lastValue = this->param_01_value;
     }
 
-    this->expr_02_in1_set(v);
+    this->expr_03_in1_set(v);
 }
 
 void trigger_01_out1_bang() {
@@ -1739,18 +1843,18 @@ void linetilde_01_segments_set(const list& v) {
     }
 }
 
-void expr_08_out1_set(number v) {
-    this->expr_08_out1 = v;
+void expr_09_out1_set(number v) {
+    this->expr_09_out1 = v;
 
     {
-        list converted = {this->expr_08_out1};
+        list converted = {this->expr_09_out1};
         this->linetilde_01_segments_set(converted);
     }
 }
 
-void expr_08_in1_set(number in1) {
-    this->expr_08_in1 = in1;
-    this->expr_08_out1_set(rnbo_pow(10, this->expr_08_in1 * 0.05));//#map:dbtoa_obj-8:1
+void expr_09_in1_set(number in1) {
+    this->expr_09_in1 = in1;
+    this->expr_09_out1_set(rnbo_pow(10, this->expr_09_in1 * 0.05));//#map:dbtoa_obj-8:1
 }
 
 number param_04_value_constrain(number v) const {
@@ -1770,23 +1874,23 @@ void line_02_time_set(number v) {
     this->line_02_time = v;
 }
 
-void dspexpr_12_in2_set(number v) {
-    this->dspexpr_12_in2 = v;
+void dspexpr_13_in2_set(number v) {
+    this->dspexpr_13_in2 = v;
 }
 
-void expr_07_out1_set(number v) {
-    this->expr_07_out1 = v;
-    this->dspexpr_12_in2_set(this->expr_07_out1);
+void expr_08_out1_set(number v) {
+    this->expr_08_out1 = v;
+    this->dspexpr_13_in2_set(this->expr_08_out1);
 }
 
-void expr_07_in1_set(number in1) {
-    this->expr_07_in1 = in1;
-    this->expr_07_out1_set(this->expr_07_in1 * this->expr_07_in2);//#map:*_obj-56:1
+void expr_08_in1_set(number in1) {
+    this->expr_08_in1 = in1;
+    this->expr_08_out1_set(this->expr_08_in1 * this->expr_08_in2);//#map:*_obj-56:1
 }
 
 void line_02_output_set(number v) {
     this->line_02_output = v;
-    this->expr_07_in1_set(v);
+    this->expr_08_in1_set(v);
 }
 
 void line_02_stop_bang() {
@@ -1848,18 +1952,18 @@ void line_02_target_set(const list& v) {
     }
 }
 
-void expr_09_out1_set(number v) {
-    this->expr_09_out1 = v;
+void expr_10_out1_set(number v) {
+    this->expr_10_out1 = v;
 
     {
-        list converted = {this->expr_09_out1};
+        list converted = {this->expr_10_out1};
         this->line_02_target_set(converted);
     }
 }
 
-void expr_09_in1_set(number in1) {
-    this->expr_09_in1 = in1;
-    this->expr_09_out1_set(rnbo_pow(10, this->expr_09_in1 * 0.05));//#map:dbtoa_obj-45:1
+void expr_10_in1_set(number in1) {
+    this->expr_10_in1 = in1;
+    this->expr_10_out1_set(rnbo_pow(10, this->expr_10_in1 * 0.05));//#map:dbtoa_obj-45:1
 }
 
 number param_05_value_constrain(number v) const {
@@ -1875,8 +1979,8 @@ number param_05_value_constrain(number v) const {
     return v;
 }
 
-void dspexpr_10_in2_set(number v) {
-    this->dspexpr_10_in2 = v;
+void dspexpr_11_in2_set(number v) {
+    this->dspexpr_11_in2 = v;
 }
 
 void dspexpr_07_in2_set(number v) {
@@ -1885,7 +1989,7 @@ void dspexpr_07_in2_set(number v) {
 
 void expr_11_out1_set(number v) {
     this->expr_11_out1 = v;
-    this->dspexpr_10_in2_set(this->expr_11_out1);
+    this->dspexpr_11_in2_set(this->expr_11_out1);
     this->dspexpr_07_in2_set(this->expr_11_out1);
 }
 
@@ -1899,7 +2003,7 @@ number param_06_value_constrain(number v) const {
     return v;
 }
 
-void outport_05_input_number_set(number v) {
+void outport_06_input_number_set(number v) {
     this->getEngine()->sendNumMessage(TAG("delay_time"), TAG(""), v, this->_currentTime);
 }
 
@@ -1927,7 +2031,7 @@ void mstosamps_01_ms_set(number ms) {
 
 void expr_13_out1_set(number v) {
     this->expr_13_out1 = v;
-    this->outport_05_input_number_set(this->expr_13_out1);
+    this->outport_06_input_number_set(this->expr_13_out1);
     this->mstosamps_01_ms_set(this->expr_13_out1);
 }
 
@@ -1971,13 +2075,13 @@ number param_07_value_constrain(number v) const {
     return v;
 }
 
-void expr_07_in2_set(number v) {
-    this->expr_07_in2 = v;
+void expr_08_in2_set(number v) {
+    this->expr_08_in2 = v;
 }
 
 void expr_14_out1_set(number v) {
     this->expr_14_out1 = v;
-    this->expr_07_in2_set(this->expr_14_out1);
+    this->expr_08_in2_set(this->expr_14_out1);
 }
 
 void expr_14_$in1_set(number $in1) {
@@ -1998,7 +2102,7 @@ void param_04_value_bang() {
         this->param_04_lastValue = this->param_04_value;
     }
 
-    this->expr_09_in1_set(v);
+    this->expr_10_in1_set(v);
 }
 
 void trigger_02_out1_bang() {
@@ -2046,7 +2150,7 @@ void trigger_03_input_number_set(number v) {
 }
 
 void outport_01_input_number_set(number v) {
-    this->getEngine()->sendNumMessage(TAG("in_rms_L"), TAG(""), v, this->_currentTime);
+    this->getEngine()->sendNumMessage(TAG("out_rms_L"), TAG(""), v, this->_currentTime);
 }
 
 void expr_01_out1_set(number v) {
@@ -2059,58 +2163,70 @@ void expr_01_in1_set(number in1) {
 
     this->expr_01_out1_set(
         (this->expr_01_in1 <= 0 ? -999 : 20 * rnbo_log10((this->expr_01_in1 <= 0.0000000001 ? 0.0000000001 : this->expr_01_in1)))
-    );//#map:atodb_obj-30:1
-}
-
-void outport_02_input_number_set(number v) {
-    this->getEngine()->sendNumMessage(TAG("in_rms_R"), TAG(""), v, this->_currentTime);
-}
-
-void expr_03_out1_set(number v) {
-    this->expr_03_out1 = v;
-    this->outport_02_input_number_set(this->expr_03_out1);
-}
-
-void expr_03_in1_set(number in1) {
-    this->expr_03_in1 = in1;
-
-    this->expr_03_out1_set(
-        (this->expr_03_in1 <= 0 ? -999 : 20 * rnbo_log10((this->expr_03_in1 <= 0.0000000001 ? 0.0000000001 : this->expr_03_in1)))
-    );//#map:atodb_obj-31:1
-}
-
-void outport_03_input_number_set(number v) {
-    this->getEngine()->sendNumMessage(TAG("out_rms_L"), TAG(""), v, this->_currentTime);
-}
-
-void expr_06_out1_set(number v) {
-    this->expr_06_out1 = v;
-    this->outport_03_input_number_set(this->expr_06_out1);
-}
-
-void expr_06_in1_set(number in1) {
-    this->expr_06_in1 = in1;
-
-    this->expr_06_out1_set(
-        (this->expr_06_in1 <= 0 ? -999 : 20 * rnbo_log10((this->expr_06_in1 <= 0.0000000001 ? 0.0000000001 : this->expr_06_in1)))
     );//#map:atodb_obj-32:1
 }
 
-void outport_04_input_number_set(number v) {
+void outport_02_input_number_set(number v) {
+    this->getEngine()->sendNumMessage(TAG("in_rms_L"), TAG(""), v, this->_currentTime);
+}
+
+void expr_02_out1_set(number v) {
+    this->expr_02_out1 = v;
+    this->outport_02_input_number_set(this->expr_02_out1);
+}
+
+void expr_02_in1_set(number in1) {
+    this->expr_02_in1 = in1;
+
+    this->expr_02_out1_set(
+        (this->expr_02_in1 <= 0 ? -999 : 20 * rnbo_log10((this->expr_02_in1 <= 0.0000000001 ? 0.0000000001 : this->expr_02_in1)))
+    );//#map:atodb_obj-30:1
+}
+
+void outport_03_input_number_set(number v) {
     this->getEngine()->sendNumMessage(TAG("out_rms_R"), TAG(""), v, this->_currentTime);
 }
 
-void expr_10_out1_set(number v) {
-    this->expr_10_out1 = v;
-    this->outport_04_input_number_set(this->expr_10_out1);
+void expr_04_out1_set(number v) {
+    this->expr_04_out1 = v;
+    this->outport_03_input_number_set(this->expr_04_out1);
 }
 
-void expr_10_in1_set(number in1) {
-    this->expr_10_in1 = in1;
+void expr_04_in1_set(number in1) {
+    this->expr_04_in1 = in1;
 
-    this->expr_10_out1_set(
-        (this->expr_10_in1 <= 0 ? -999 : 20 * rnbo_log10((this->expr_10_in1 <= 0.0000000001 ? 0.0000000001 : this->expr_10_in1)))
+    this->expr_04_out1_set(
+        (this->expr_04_in1 <= 0 ? -999 : 20 * rnbo_log10((this->expr_04_in1 <= 0.0000000001 ? 0.0000000001 : this->expr_04_in1)))
     );//#map:atodb_obj-33:1
+}
+
+void outport_04_input_number_set(number v) {
+    this->getEngine()->sendNumMessage(TAG("in_rms_R"), TAG(""), v, this->_currentTime);
+}
+
+void expr_05_out1_set(number v) {
+    this->expr_05_out1 = v;
+    this->outport_04_input_number_set(this->expr_05_out1);
+}
+
+void expr_05_in1_set(number in1) {
+    this->expr_05_in1 = in1;
+
+    this->expr_05_out1_set(
+        (this->expr_05_in1 <= 0 ? -999 : 20 * rnbo_log10((this->expr_05_in1 <= 0.0000000001 ? 0.0000000001 : this->expr_05_in1)))
+    );//#map:atodb_obj-31:1
+}
+
+void outport_05_input_number_set(number v) {
+    this->getEngine()->sendNumMessage(TAG("correlation_value"), TAG(""), v, this->_currentTime);
+}
+
+void outport_07_input_number_set(number v) {
+    this->getEngine()->sendNumMessage(TAG("scopeY"), TAG(""), v, this->_currentTime);
+}
+
+void outport_08_input_number_set(number v) {
+    this->getEngine()->sendNumMessage(TAG("scopeX"), TAG(""), v, this->_currentTime);
 }
 
 void delaytilde_01_perform(number delay, const SampleValue * input, SampleValue * output, Index n) {
@@ -2178,7 +2294,7 @@ void dspexpr_07_perform(const Sample * in1, number in2, SampleValue * out1, Inde
     }
 }
 
-void average_rms_tilde_01_perform(
+void average_rms_tilde_02_perform(
     const Sample * x,
     number windowSize,
     number reset,
@@ -2190,45 +2306,45 @@ void average_rms_tilde_01_perform(
     Index i;
 
     for (i = 0; i < n; i++) {
-        out1[(Index)i] = this->safesqrt(this->average_rms_tilde_01_av_next(x[(Index)i] * x[(Index)i], 2048, 0));
+        out1[(Index)i] = this->safesqrt(this->average_rms_tilde_02_av_next(x[(Index)i] * x[(Index)i], 2048, 0));
     }
 }
 
-void snapshot_01_perform(const SampleValue * input_signal, Index n) {
-    auto __snapshot_01_lastValue = this->snapshot_01_lastValue;
-    auto __snapshot_01_calc = this->snapshot_01_calc;
-    auto __snapshot_01_count = this->snapshot_01_count;
-    auto __snapshot_01_nextTime = this->snapshot_01_nextTime;
-    auto __snapshot_01_interval = this->snapshot_01_interval;
-    number timeInSamples = this->msToSamps(__snapshot_01_interval, this->sr);
+void snapshot_02_perform(const SampleValue * input_signal, Index n) {
+    auto __snapshot_02_lastValue = this->snapshot_02_lastValue;
+    auto __snapshot_02_calc = this->snapshot_02_calc;
+    auto __snapshot_02_count = this->snapshot_02_count;
+    auto __snapshot_02_nextTime = this->snapshot_02_nextTime;
+    auto __snapshot_02_interval = this->snapshot_02_interval;
+    number timeInSamples = this->msToSamps(__snapshot_02_interval, this->sr);
 
-    if (__snapshot_01_interval > 0) {
+    if (__snapshot_02_interval > 0) {
         for (Index i = 0; i < n; i++) {
-            if (__snapshot_01_nextTime <= __snapshot_01_count + (SampleIndex)(i)) {
+            if (__snapshot_02_nextTime <= __snapshot_02_count + (SampleIndex)(i)) {
                 {
-                    __snapshot_01_calc = input_signal[(Index)i];
+                    __snapshot_02_calc = input_signal[(Index)i];
                 }
 
                 this->getEngine()->scheduleClockEventWithValue(
                     this,
-                    770648402,
+                    1033938262,
                     this->sampsToMs((SampleIndex)(this->vs)) + this->_currentTime,
-                    __snapshot_01_calc
+                    __snapshot_02_calc
                 );;
 
-                __snapshot_01_calc = 0;
-                __snapshot_01_nextTime += timeInSamples;
+                __snapshot_02_calc = 0;
+                __snapshot_02_nextTime += timeInSamples;
             }
         }
 
-        __snapshot_01_count += this->vs;
+        __snapshot_02_count += this->vs;
     }
 
-    __snapshot_01_lastValue = input_signal[(Index)(n - 1)];
-    this->snapshot_01_nextTime = __snapshot_01_nextTime;
-    this->snapshot_01_count = __snapshot_01_count;
-    this->snapshot_01_calc = __snapshot_01_calc;
-    this->snapshot_01_lastValue = __snapshot_01_lastValue;
+    __snapshot_02_lastValue = input_signal[(Index)(n - 1)];
+    this->snapshot_02_nextTime = __snapshot_02_nextTime;
+    this->snapshot_02_count = __snapshot_02_count;
+    this->snapshot_02_calc = __snapshot_02_calc;
+    this->snapshot_02_lastValue = __snapshot_02_lastValue;
 }
 
 void delaytilde_02_perform(number delay, const SampleValue * input, SampleValue * output, Index n) {
@@ -2288,7 +2404,7 @@ void selector_02_perform(
     }
 }
 
-void dspexpr_10_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
+void dspexpr_11_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
     Index i;
 
     for (i = 0; i < n; i++) {
@@ -2296,57 +2412,7 @@ void dspexpr_10_perform(const Sample * in1, number in2, SampleValue * out1, Inde
     }
 }
 
-void dspexpr_09_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
-    Index i;
-
-    for (i = 0; i < n; i++) {
-        out1[(Index)i] = in1[(Index)i] - in2[(Index)i];//#map:_###_obj_###_:1
-    }
-}
-
-void dspexpr_13_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
-    RNBO_UNUSED(in2);
-    Index i;
-
-    for (i = 0; i < n; i++) {
-        out1[(Index)i] = in1[(Index)i] * 0.707107;//#map:_###_obj_###_:1
-    }
-}
-
-void dspexpr_12_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
-    Index i;
-
-    for (i = 0; i < n; i++) {
-        out1[(Index)i] = in1[(Index)i] * in2;//#map:_###_obj_###_:1
-    }
-}
-
-void dspexpr_06_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
-    Index i;
-
-    for (i = 0; i < n; i++) {
-        out1[(Index)i] = in1[(Index)i] + in2[(Index)i];//#map:_###_obj_###_:1
-    }
-}
-
-void dspexpr_04_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
-    RNBO_UNUSED(in2);
-    Index i;
-
-    for (i = 0; i < n; i++) {
-        out1[(Index)i] = in1[(Index)i] * 0.707107;//#map:_###_obj_###_:1
-    }
-}
-
-void dspexpr_03_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
-    Index i;
-
-    for (i = 0; i < n; i++) {
-        out1[(Index)i] = in1[(Index)i] * in2;//#map:_###_obj_###_:1
-    }
-}
-
-void dspexpr_11_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
+void dspexpr_10_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
     Index i;
 
     for (i = 0; i < n; i++) {
@@ -2363,7 +2429,15 @@ void dspexpr_14_perform(const Sample * in1, number in2, SampleValue * out1, Inde
     }
 }
 
-void dspexpr_02_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
+void dspexpr_13_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] * in2;//#map:_###_obj_###_:1
+    }
+}
+
+void dspexpr_06_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
     Index i;
 
     for (i = 0; i < n; i++) {
@@ -2371,7 +2445,7 @@ void dspexpr_02_perform(const Sample * in1, const Sample * in2, SampleValue * ou
     }
 }
 
-void dspexpr_01_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
+void dspexpr_03_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
     RNBO_UNUSED(in2);
     Index i;
 
@@ -2380,7 +2454,49 @@ void dspexpr_01_perform(const Sample * in1, number in2, SampleValue * out1, Inde
     }
 }
 
-void average_rms_tilde_02_perform(
+void dspexpr_02_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] * in2;//#map:_###_obj_###_:1
+    }
+}
+
+void dspexpr_12_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] - in2[(Index)i];//#map:_###_obj_###_:1
+    }
+}
+
+void dspexpr_09_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
+    RNBO_UNUSED(in2);
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] * 0.707107;//#map:_###_obj_###_:1
+    }
+}
+
+void dspexpr_01_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] + in2[(Index)i];//#map:_###_obj_###_:1
+    }
+}
+
+void dspexpr_04_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
+    RNBO_UNUSED(in2);
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] * 0.707107;//#map:_###_obj_###_:1
+    }
+}
+
+void average_rms_tilde_04_perform(
     const Sample * x,
     number windowSize,
     number reset,
@@ -2392,45 +2508,45 @@ void average_rms_tilde_02_perform(
     Index i;
 
     for (i = 0; i < n; i++) {
-        out1[(Index)i] = this->safesqrt(this->average_rms_tilde_02_av_next(x[(Index)i] * x[(Index)i], 2048, 0));
+        out1[(Index)i] = this->safesqrt(this->average_rms_tilde_04_av_next(x[(Index)i] * x[(Index)i], 2048, 0));
     }
 }
 
-void snapshot_02_perform(const SampleValue * input_signal, Index n) {
-    auto __snapshot_02_lastValue = this->snapshot_02_lastValue;
-    auto __snapshot_02_calc = this->snapshot_02_calc;
-    auto __snapshot_02_count = this->snapshot_02_count;
-    auto __snapshot_02_nextTime = this->snapshot_02_nextTime;
-    auto __snapshot_02_interval = this->snapshot_02_interval;
-    number timeInSamples = this->msToSamps(__snapshot_02_interval, this->sr);
+void snapshot_04_perform(const SampleValue * input_signal, Index n) {
+    auto __snapshot_04_lastValue = this->snapshot_04_lastValue;
+    auto __snapshot_04_calc = this->snapshot_04_calc;
+    auto __snapshot_04_count = this->snapshot_04_count;
+    auto __snapshot_04_nextTime = this->snapshot_04_nextTime;
+    auto __snapshot_04_interval = this->snapshot_04_interval;
+    number timeInSamples = this->msToSamps(__snapshot_04_interval, this->sr);
 
-    if (__snapshot_02_interval > 0) {
+    if (__snapshot_04_interval > 0) {
         for (Index i = 0; i < n; i++) {
-            if (__snapshot_02_nextTime <= __snapshot_02_count + (SampleIndex)(i)) {
+            if (__snapshot_04_nextTime <= __snapshot_04_count + (SampleIndex)(i)) {
                 {
-                    __snapshot_02_calc = input_signal[(Index)i];
+                    __snapshot_04_calc = input_signal[(Index)i];
                 }
 
                 this->getEngine()->scheduleClockEventWithValue(
                     this,
-                    -368915887,
+                    -2121464745,
                     this->sampsToMs((SampleIndex)(this->vs)) + this->_currentTime,
-                    __snapshot_02_calc
+                    __snapshot_04_calc
                 );;
 
-                __snapshot_02_calc = 0;
-                __snapshot_02_nextTime += timeInSamples;
+                __snapshot_04_calc = 0;
+                __snapshot_04_nextTime += timeInSamples;
             }
         }
 
-        __snapshot_02_count += this->vs;
+        __snapshot_04_count += this->vs;
     }
 
-    __snapshot_02_lastValue = input_signal[(Index)(n - 1)];
-    this->snapshot_02_nextTime = __snapshot_02_nextTime;
-    this->snapshot_02_count = __snapshot_02_count;
-    this->snapshot_02_calc = __snapshot_02_calc;
-    this->snapshot_02_lastValue = __snapshot_02_lastValue;
+    __snapshot_04_lastValue = input_signal[(Index)(n - 1)];
+    this->snapshot_04_nextTime = __snapshot_04_nextTime;
+    this->snapshot_04_count = __snapshot_04_count;
+    this->snapshot_04_calc = __snapshot_04_calc;
+    this->snapshot_04_lastValue = __snapshot_04_lastValue;
 }
 
 void linetilde_01_perform(SampleValue * out, Index n) {
@@ -2492,67 +2608,6 @@ void dspexpr_08_perform(const Sample * in1, const Sample * in2, SampleValue * ou
     }
 }
 
-void average_rms_tilde_04_perform(
-    const Sample * x,
-    number windowSize,
-    number reset,
-    SampleValue * out1,
-    Index n
-) {
-    RNBO_UNUSED(reset);
-    RNBO_UNUSED(windowSize);
-    Index i;
-
-    for (i = 0; i < n; i++) {
-        out1[(Index)i] = this->safesqrt(this->average_rms_tilde_04_av_next(x[(Index)i] * x[(Index)i], 2048, 0));
-    }
-}
-
-void snapshot_04_perform(const SampleValue * input_signal, Index n) {
-    auto __snapshot_04_lastValue = this->snapshot_04_lastValue;
-    auto __snapshot_04_calc = this->snapshot_04_calc;
-    auto __snapshot_04_count = this->snapshot_04_count;
-    auto __snapshot_04_nextTime = this->snapshot_04_nextTime;
-    auto __snapshot_04_interval = this->snapshot_04_interval;
-    number timeInSamples = this->msToSamps(__snapshot_04_interval, this->sr);
-
-    if (__snapshot_04_interval > 0) {
-        for (Index i = 0; i < n; i++) {
-            if (__snapshot_04_nextTime <= __snapshot_04_count + (SampleIndex)(i)) {
-                {
-                    __snapshot_04_calc = input_signal[(Index)i];
-                }
-
-                this->getEngine()->scheduleClockEventWithValue(
-                    this,
-                    1646922831,
-                    this->sampsToMs((SampleIndex)(this->vs)) + this->_currentTime,
-                    __snapshot_04_calc
-                );;
-
-                __snapshot_04_calc = 0;
-                __snapshot_04_nextTime += timeInSamples;
-            }
-        }
-
-        __snapshot_04_count += this->vs;
-    }
-
-    __snapshot_04_lastValue = input_signal[(Index)(n - 1)];
-    this->snapshot_04_nextTime = __snapshot_04_nextTime;
-    this->snapshot_04_count = __snapshot_04_count;
-    this->snapshot_04_calc = __snapshot_04_calc;
-    this->snapshot_04_lastValue = __snapshot_04_lastValue;
-}
-
-void dspexpr_05_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
-    Index i;
-
-    for (i = 0; i < n; i++) {
-        out1[(Index)i] = in1[(Index)i] * in2[(Index)i];//#map:_###_obj_###_:1
-    }
-}
-
 void average_rms_tilde_03_perform(
     const Sample * x,
     number windowSize,
@@ -2586,7 +2641,7 @@ void snapshot_03_perform(const SampleValue * input_signal, Index n) {
 
                 this->getEngine()->scheduleClockEventWithValue(
                     this,
-                    -1508480176,
+                    2018930062,
                     this->sampsToMs((SampleIndex)(this->vs)) + this->_currentTime,
                     __snapshot_03_calc
                 );;
@@ -2604,6 +2659,273 @@ void snapshot_03_perform(const SampleValue * input_signal, Index n) {
     this->snapshot_03_count = __snapshot_03_count;
     this->snapshot_03_calc = __snapshot_03_calc;
     this->snapshot_03_lastValue = __snapshot_03_lastValue;
+}
+
+void signalforwarder_01_perform(const SampleValue * input, SampleValue * output, Index n) {
+    for (Index i = 0; i < n; i++) {
+        output[(Index)i] = input[(Index)i];
+    }
+}
+
+void dspexpr_05_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] * in2[(Index)i];//#map:_###_obj_###_:1
+    }
+}
+
+void dspexpr_20_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] - in2[(Index)i];//#map:_###_obj_###_:1
+    }
+}
+
+void snapshot_07_perform(const SampleValue * input_signal, Index n) {
+    auto __snapshot_07_lastValue = this->snapshot_07_lastValue;
+    auto __snapshot_07_calc = this->snapshot_07_calc;
+    auto __snapshot_07_count = this->snapshot_07_count;
+    auto __snapshot_07_nextTime = this->snapshot_07_nextTime;
+    auto __snapshot_07_interval = this->snapshot_07_interval;
+    number timeInSamples = this->msToSamps(__snapshot_07_interval, this->sr);
+
+    if (__snapshot_07_interval > 0) {
+        for (Index i = 0; i < n; i++) {
+            if (__snapshot_07_nextTime <= __snapshot_07_count + (SampleIndex)(i)) {
+                {
+                    __snapshot_07_calc = input_signal[(Index)i];
+                }
+
+                this->getEngine()->scheduleClockEventWithValue(
+                    this,
+                    1142655633,
+                    this->sampsToMs((SampleIndex)(this->vs)) + this->_currentTime,
+                    __snapshot_07_calc
+                );;
+
+                __snapshot_07_calc = 0;
+                __snapshot_07_nextTime += timeInSamples;
+            }
+        }
+
+        __snapshot_07_count += this->vs;
+    }
+
+    __snapshot_07_lastValue = input_signal[(Index)(n - 1)];
+    this->snapshot_07_nextTime = __snapshot_07_nextTime;
+    this->snapshot_07_count = __snapshot_07_count;
+    this->snapshot_07_calc = __snapshot_07_calc;
+    this->snapshot_07_lastValue = __snapshot_07_lastValue;
+}
+
+void dspexpr_19_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] + in2[(Index)i];//#map:_###_obj_###_:1
+    }
+}
+
+void snapshot_06_perform(const SampleValue * input_signal, Index n) {
+    auto __snapshot_06_lastValue = this->snapshot_06_lastValue;
+    auto __snapshot_06_calc = this->snapshot_06_calc;
+    auto __snapshot_06_count = this->snapshot_06_count;
+    auto __snapshot_06_nextTime = this->snapshot_06_nextTime;
+    auto __snapshot_06_interval = this->snapshot_06_interval;
+    number timeInSamples = this->msToSamps(__snapshot_06_interval, this->sr);
+
+    if (__snapshot_06_interval > 0) {
+        for (Index i = 0; i < n; i++) {
+            if (__snapshot_06_nextTime <= __snapshot_06_count + (SampleIndex)(i)) {
+                {
+                    __snapshot_06_calc = input_signal[(Index)i];
+                }
+
+                this->getEngine()->scheduleClockEventWithValue(
+                    this,
+                    3091344,
+                    this->sampsToMs((SampleIndex)(this->vs)) + this->_currentTime,
+                    __snapshot_06_calc
+                );;
+
+                __snapshot_06_calc = 0;
+                __snapshot_06_nextTime += timeInSamples;
+            }
+        }
+
+        __snapshot_06_count += this->vs;
+    }
+
+    __snapshot_06_lastValue = input_signal[(Index)(n - 1)];
+    this->snapshot_06_nextTime = __snapshot_06_nextTime;
+    this->snapshot_06_count = __snapshot_06_count;
+    this->snapshot_06_calc = __snapshot_06_calc;
+    this->snapshot_06_lastValue = __snapshot_06_lastValue;
+}
+
+void dspexpr_15_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] * in2[(Index)i];//#map:_###_obj_###_:1
+    }
+}
+
+void slide_tilde_01_perform(const Sample * x, number up, number down, SampleValue * out1, Index n) {
+    RNBO_UNUSED(down);
+    RNBO_UNUSED(up);
+    auto __slide_tilde_01_prev = this->slide_tilde_01_prev;
+    auto iup = this->safediv(1., this->maximum(1., rnbo_abs(5000)));
+    auto idown = this->safediv(1., this->maximum(1., rnbo_abs(5000)));
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        number temp = x[(Index)i] - __slide_tilde_01_prev;
+        __slide_tilde_01_prev = __slide_tilde_01_prev + ((x[(Index)i] > __slide_tilde_01_prev ? iup : idown)) * temp;
+        out1[(Index)i] = __slide_tilde_01_prev;
+    }
+
+    this->slide_tilde_01_prev = __slide_tilde_01_prev;
+}
+
+void average_rms_tilde_01_perform(
+    const Sample * x,
+    number windowSize,
+    number reset,
+    SampleValue * out1,
+    Index n
+) {
+    RNBO_UNUSED(reset);
+    RNBO_UNUSED(windowSize);
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = this->safesqrt(this->average_rms_tilde_01_av_next(x[(Index)i] * x[(Index)i], 2048, 0));
+    }
+}
+
+void snapshot_01_perform(const SampleValue * input_signal, Index n) {
+    auto __snapshot_01_lastValue = this->snapshot_01_lastValue;
+    auto __snapshot_01_calc = this->snapshot_01_calc;
+    auto __snapshot_01_count = this->snapshot_01_count;
+    auto __snapshot_01_nextTime = this->snapshot_01_nextTime;
+    auto __snapshot_01_interval = this->snapshot_01_interval;
+    number timeInSamples = this->msToSamps(__snapshot_01_interval, this->sr);
+
+    if (__snapshot_01_interval > 0) {
+        for (Index i = 0; i < n; i++) {
+            if (__snapshot_01_nextTime <= __snapshot_01_count + (SampleIndex)(i)) {
+                {
+                    __snapshot_01_calc = input_signal[(Index)i];
+                }
+
+                this->getEngine()->scheduleClockEventWithValue(
+                    this,
+                    879365773,
+                    this->sampsToMs((SampleIndex)(this->vs)) + this->_currentTime,
+                    __snapshot_01_calc
+                );;
+
+                __snapshot_01_calc = 0;
+                __snapshot_01_nextTime += timeInSamples;
+            }
+        }
+
+        __snapshot_01_count += this->vs;
+    }
+
+    __snapshot_01_lastValue = input_signal[(Index)(n - 1)];
+    this->snapshot_01_nextTime = __snapshot_01_nextTime;
+    this->snapshot_01_count = __snapshot_01_count;
+    this->snapshot_01_calc = __snapshot_01_calc;
+    this->snapshot_01_lastValue = __snapshot_01_lastValue;
+}
+
+void dspexpr_18_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] * in2[(Index)i];//#map:_###_obj_###_:1
+    }
+}
+
+void dspexpr_17_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
+    RNBO_UNUSED(in2);
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] + 0.0001;//#map:_###_obj_###_:1
+    }
+}
+
+void slide_tilde_02_perform(const Sample * x, number up, number down, SampleValue * out1, Index n) {
+    RNBO_UNUSED(down);
+    RNBO_UNUSED(up);
+    auto __slide_tilde_02_prev = this->slide_tilde_02_prev;
+    auto iup = this->safediv(1., this->maximum(1., rnbo_abs(5000)));
+    auto idown = this->safediv(1., this->maximum(1., rnbo_abs(5000)));
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        number temp = x[(Index)i] - __slide_tilde_02_prev;
+        __slide_tilde_02_prev = __slide_tilde_02_prev + ((x[(Index)i] > __slide_tilde_02_prev ? iup : idown)) * temp;
+        out1[(Index)i] = __slide_tilde_02_prev;
+    }
+
+    this->slide_tilde_02_prev = __slide_tilde_02_prev;
+}
+
+void dspexpr_16_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = (in2[(Index)i] == 0 ? 0 : (in2[(Index)i] == 0. ? 0. : in1[(Index)i] / in2[(Index)i]));//#map:_###_obj_###_:1
+    }
+}
+
+void snapshot_05_perform(const SampleValue * input_signal, Index n) {
+    auto __snapshot_05_lastValue = this->snapshot_05_lastValue;
+    auto __snapshot_05_calc = this->snapshot_05_calc;
+    auto __snapshot_05_count = this->snapshot_05_count;
+    auto __snapshot_05_nextTime = this->snapshot_05_nextTime;
+    auto __snapshot_05_interval = this->snapshot_05_interval;
+    number timeInSamples = this->msToSamps(__snapshot_05_interval, this->sr);
+
+    if (__snapshot_05_interval > 0) {
+        for (Index i = 0; i < n; i++) {
+            if (__snapshot_05_nextTime <= __snapshot_05_count + (SampleIndex)(i)) {
+                {
+                    __snapshot_05_calc = input_signal[(Index)i];
+                }
+
+                this->getEngine()->scheduleClockEventWithValue(
+                    this,
+                    -1136472945,
+                    this->sampsToMs((SampleIndex)(this->vs)) + this->_currentTime,
+                    __snapshot_05_calc
+                );;
+
+                __snapshot_05_calc = 0;
+                __snapshot_05_nextTime += timeInSamples;
+            }
+        }
+
+        __snapshot_05_count += this->vs;
+    }
+
+    __snapshot_05_lastValue = input_signal[(Index)(n - 1)];
+    this->snapshot_05_nextTime = __snapshot_05_nextTime;
+    this->snapshot_05_count = __snapshot_05_count;
+    this->snapshot_05_calc = __snapshot_05_calc;
+    this->snapshot_05_lastValue = __snapshot_05_lastValue;
+}
+
+void signalforwarder_02_perform(const SampleValue * input, SampleValue * output, Index n) {
+    for (Index i = 0; i < n; i++) {
+        output[(Index)i] = input[(Index)i];
+    }
 }
 
 void stackprotect_perform(Index n) {
@@ -2697,68 +3019,6 @@ void average_rms_tilde_01_dspsetup(bool force) {
     this->average_rms_tilde_01_av_dspsetup();
 }
 
-number line_01_valueAtTime(MillisecondTime time) {
-    return this->line_01_startValue + this->line_01_slope * (time - this->line_01_startTime);
-}
-
-void line_01_scheduleNext() {
-    MillisecondTime currentTime = (MillisecondTime)(this->currenttime());
-    number nextTime = currentTime + this->line_01_grain;
-    number nextValue;
-
-    if (nextTime - this->line_01_startTime >= this->line_01__time || this->line_01_grain == 0) {
-        nextTime = this->line_01_startTime + this->line_01__time;
-        nextValue = this->line_01_currentTarget;
-    } else {
-        nextValue = this->line_01_valueAtTime(nextTime);
-    }
-
-    this->getEngine()->scheduleClockEventWithValue(this, 1220262738, nextTime - currentTime + this->_currentTime, nextValue);;
-}
-
-void line_01_startRamp(number target, MillisecondTime time) {
-    MillisecondTime currentTime = (MillisecondTime)(this->currenttime());
-    this->line_01_startValue = this->line_01_valueAtTime(currentTime);
-    this->line_01_startTime = currentTime;
-    this->line_01_currentTarget = target;
-    this->getEngine()->flushClockEvents(this, 1220262738, false);;
-    number rise = target - this->line_01_startValue;
-    this->line_01_slope = rise / time;
-    this->line_01_scheduleNext();
-}
-
-bool line_01_isFinished(number value) {
-    return value == this->line_01_currentTarget && this->currenttime() - this->line_01_startTime >= this->line_01__time;
-}
-
-void line_01_startPendingRamp() {
-    if (this->line_01_pendingRamps->length < 2) {
-        this->line_01_pendingRamps->length = 0;
-        this->line_01__time = 0;
-        this->line_01_time_set(0);
-        this->line_01_end_bang();
-        return;
-    }
-
-    if (this->line_01_pendingRamps->length > 1) {
-        number target = this->line_01_pendingRamps->shift();
-        this->line_01__time = this->line_01_pendingRamps->shift();
-        this->line_01__time = (this->line_01__time < 0 ? 0 : this->line_01__time);
-        this->line_01_startRamp(target, this->line_01__time);
-    }
-}
-
-void param_01_getPresetValue(PatcherStateInterface& preset) {
-    preset["value"] = this->param_01_value;
-}
-
-void param_01_setPresetValue(PatcherStateInterface& preset) {
-    if ((bool)(stateIsEmpty(preset)))
-        return;
-
-    this->param_01_value_set(preset["value"]);
-}
-
 number average_rms_tilde_02_av_next(number x, int windowSize, bool reset) {
     if (windowSize > 0)
         this->average_rms_tilde_02_av_setwindowsize(windowSize);
@@ -2841,6 +3101,236 @@ void average_rms_tilde_02_dspsetup(bool force) {
 
     this->average_rms_tilde_02_setupDone = true;
     this->average_rms_tilde_02_av_dspsetup();
+}
+
+number line_01_valueAtTime(MillisecondTime time) {
+    return this->line_01_startValue + this->line_01_slope * (time - this->line_01_startTime);
+}
+
+void line_01_scheduleNext() {
+    MillisecondTime currentTime = (MillisecondTime)(this->currenttime());
+    number nextTime = currentTime + this->line_01_grain;
+    number nextValue;
+
+    if (nextTime - this->line_01_startTime >= this->line_01__time || this->line_01_grain == 0) {
+        nextTime = this->line_01_startTime + this->line_01__time;
+        nextValue = this->line_01_currentTarget;
+    } else {
+        nextValue = this->line_01_valueAtTime(nextTime);
+    }
+
+    this->getEngine()->scheduleClockEventWithValue(this, 1220262738, nextTime - currentTime + this->_currentTime, nextValue);;
+}
+
+void line_01_startRamp(number target, MillisecondTime time) {
+    MillisecondTime currentTime = (MillisecondTime)(this->currenttime());
+    this->line_01_startValue = this->line_01_valueAtTime(currentTime);
+    this->line_01_startTime = currentTime;
+    this->line_01_currentTarget = target;
+    this->getEngine()->flushClockEvents(this, 1220262738, false);;
+    number rise = target - this->line_01_startValue;
+    this->line_01_slope = rise / time;
+    this->line_01_scheduleNext();
+}
+
+bool line_01_isFinished(number value) {
+    return value == this->line_01_currentTarget && this->currenttime() - this->line_01_startTime >= this->line_01__time;
+}
+
+void line_01_startPendingRamp() {
+    if (this->line_01_pendingRamps->length < 2) {
+        this->line_01_pendingRamps->length = 0;
+        this->line_01__time = 0;
+        this->line_01_time_set(0);
+        this->line_01_end_bang();
+        return;
+    }
+
+    if (this->line_01_pendingRamps->length > 1) {
+        number target = this->line_01_pendingRamps->shift();
+        this->line_01__time = this->line_01_pendingRamps->shift();
+        this->line_01__time = (this->line_01__time < 0 ? 0 : this->line_01__time);
+        this->line_01_startRamp(target, this->line_01__time);
+    }
+}
+
+void param_01_getPresetValue(PatcherStateInterface& preset) {
+    preset["value"] = this->param_01_value;
+}
+
+void param_01_setPresetValue(PatcherStateInterface& preset) {
+    if ((bool)(stateIsEmpty(preset)))
+        return;
+
+    this->param_01_value_set(preset["value"]);
+}
+
+number average_rms_tilde_03_av_next(number x, int windowSize, bool reset) {
+    if (windowSize > 0)
+        this->average_rms_tilde_03_av_setwindowsize(windowSize);
+
+    if (reset != 0) {
+        if (this->average_rms_tilde_03_av_resetFlag != 1) {
+            this->average_rms_tilde_03_av_wantsReset = 1;
+            this->average_rms_tilde_03_av_resetFlag = 1;
+        }
+    } else {
+        this->average_rms_tilde_03_av_resetFlag = 0;
+    }
+
+    if (this->average_rms_tilde_03_av_wantsReset == 1) {
+        this->average_rms_tilde_03_av_doReset();
+    }
+
+    this->average_rms_tilde_03_av_accum += x;
+    this->average_rms_tilde_03_av_buffer[(Index)this->average_rms_tilde_03_av_bufferPos] = x;
+    number bufferSize = this->average_rms_tilde_03_av_buffer->getSize();
+
+    if (this->average_rms_tilde_03_av_effectiveWindowSize < this->average_rms_tilde_03_av_currentWindowSize) {
+        this->average_rms_tilde_03_av_effectiveWindowSize++;
+    } else {
+        number bufferReadPos = this->average_rms_tilde_03_av_bufferPos - this->average_rms_tilde_03_av_effectiveWindowSize;
+
+        while (bufferReadPos < 0)
+            bufferReadPos += bufferSize;
+
+        this->average_rms_tilde_03_av_accum -= this->average_rms_tilde_03_av_buffer[(Index)bufferReadPos];
+    }
+
+    this->average_rms_tilde_03_av_bufferPos++;
+
+    if (this->average_rms_tilde_03_av_bufferPos >= bufferSize) {
+        this->average_rms_tilde_03_av_bufferPos -= bufferSize;
+    }
+
+    return this->average_rms_tilde_03_av_accum / this->average_rms_tilde_03_av_effectiveWindowSize;
+}
+
+void average_rms_tilde_03_av_setwindowsize(int wsize) {
+    wsize = trunc(wsize);
+
+    if (wsize != this->average_rms_tilde_03_av_currentWindowSize && wsize > 0 && wsize <= this->sr) {
+        this->average_rms_tilde_03_av_currentWindowSize = wsize;
+        this->average_rms_tilde_03_av_wantsReset = 1;
+    }
+}
+
+void average_rms_tilde_03_av_reset() {
+    this->average_rms_tilde_03_av_wantsReset = 1;
+}
+
+void average_rms_tilde_03_av_dspsetup() {
+    this->average_rms_tilde_03_av_wantsReset = 1;
+
+    if (this->sr > this->average_rms_tilde_03_av_buffer->getSize()) {
+        this->average_rms_tilde_03_av_buffer->setSize(this->sr + 1);
+        updateDataRef(this, this->average_rms_tilde_03_av_buffer);
+    }
+}
+
+void average_rms_tilde_03_av_doReset() {
+    this->average_rms_tilde_03_av_accum = 0;
+    this->average_rms_tilde_03_av_effectiveWindowSize = 0;
+    this->average_rms_tilde_03_av_bufferPos = 0;
+    this->average_rms_tilde_03_av_wantsReset = 0;
+}
+
+void average_rms_tilde_03_av_init() {
+    this->average_rms_tilde_03_av_currentWindowSize = this->sr;
+    this->average_rms_tilde_03_av_buffer->requestSize(this->sr + 1, 1);
+    this->average_rms_tilde_03_av_doReset();
+}
+
+void average_rms_tilde_03_dspsetup(bool force) {
+    if ((bool)(this->average_rms_tilde_03_setupDone) && (bool)(!(bool)(force)))
+        return;
+
+    this->average_rms_tilde_03_setupDone = true;
+    this->average_rms_tilde_03_av_dspsetup();
+}
+
+number average_rms_tilde_04_av_next(number x, int windowSize, bool reset) {
+    if (windowSize > 0)
+        this->average_rms_tilde_04_av_setwindowsize(windowSize);
+
+    if (reset != 0) {
+        if (this->average_rms_tilde_04_av_resetFlag != 1) {
+            this->average_rms_tilde_04_av_wantsReset = 1;
+            this->average_rms_tilde_04_av_resetFlag = 1;
+        }
+    } else {
+        this->average_rms_tilde_04_av_resetFlag = 0;
+    }
+
+    if (this->average_rms_tilde_04_av_wantsReset == 1) {
+        this->average_rms_tilde_04_av_doReset();
+    }
+
+    this->average_rms_tilde_04_av_accum += x;
+    this->average_rms_tilde_04_av_buffer[(Index)this->average_rms_tilde_04_av_bufferPos] = x;
+    number bufferSize = this->average_rms_tilde_04_av_buffer->getSize();
+
+    if (this->average_rms_tilde_04_av_effectiveWindowSize < this->average_rms_tilde_04_av_currentWindowSize) {
+        this->average_rms_tilde_04_av_effectiveWindowSize++;
+    } else {
+        number bufferReadPos = this->average_rms_tilde_04_av_bufferPos - this->average_rms_tilde_04_av_effectiveWindowSize;
+
+        while (bufferReadPos < 0)
+            bufferReadPos += bufferSize;
+
+        this->average_rms_tilde_04_av_accum -= this->average_rms_tilde_04_av_buffer[(Index)bufferReadPos];
+    }
+
+    this->average_rms_tilde_04_av_bufferPos++;
+
+    if (this->average_rms_tilde_04_av_bufferPos >= bufferSize) {
+        this->average_rms_tilde_04_av_bufferPos -= bufferSize;
+    }
+
+    return this->average_rms_tilde_04_av_accum / this->average_rms_tilde_04_av_effectiveWindowSize;
+}
+
+void average_rms_tilde_04_av_setwindowsize(int wsize) {
+    wsize = trunc(wsize);
+
+    if (wsize != this->average_rms_tilde_04_av_currentWindowSize && wsize > 0 && wsize <= this->sr) {
+        this->average_rms_tilde_04_av_currentWindowSize = wsize;
+        this->average_rms_tilde_04_av_wantsReset = 1;
+    }
+}
+
+void average_rms_tilde_04_av_reset() {
+    this->average_rms_tilde_04_av_wantsReset = 1;
+}
+
+void average_rms_tilde_04_av_dspsetup() {
+    this->average_rms_tilde_04_av_wantsReset = 1;
+
+    if (this->sr > this->average_rms_tilde_04_av_buffer->getSize()) {
+        this->average_rms_tilde_04_av_buffer->setSize(this->sr + 1);
+        updateDataRef(this, this->average_rms_tilde_04_av_buffer);
+    }
+}
+
+void average_rms_tilde_04_av_doReset() {
+    this->average_rms_tilde_04_av_accum = 0;
+    this->average_rms_tilde_04_av_effectiveWindowSize = 0;
+    this->average_rms_tilde_04_av_bufferPos = 0;
+    this->average_rms_tilde_04_av_wantsReset = 0;
+}
+
+void average_rms_tilde_04_av_init() {
+    this->average_rms_tilde_04_av_currentWindowSize = this->sr;
+    this->average_rms_tilde_04_av_buffer->requestSize(this->sr + 1, 1);
+    this->average_rms_tilde_04_av_doReset();
+}
+
+void average_rms_tilde_04_dspsetup(bool force) {
+    if ((bool)(this->average_rms_tilde_04_setupDone) && (bool)(!(bool)(force)))
+        return;
+
+    this->average_rms_tilde_04_setupDone = true;
+    this->average_rms_tilde_04_av_dspsetup();
 }
 
 void param_02_getPresetValue(PatcherStateInterface& preset) {
@@ -3286,90 +3776,6 @@ void delaytilde_02_dspsetup(bool force) {
     this->delaytilde_02_del_dspsetup();
 }
 
-number average_rms_tilde_03_av_next(number x, int windowSize, bool reset) {
-    if (windowSize > 0)
-        this->average_rms_tilde_03_av_setwindowsize(windowSize);
-
-    if (reset != 0) {
-        if (this->average_rms_tilde_03_av_resetFlag != 1) {
-            this->average_rms_tilde_03_av_wantsReset = 1;
-            this->average_rms_tilde_03_av_resetFlag = 1;
-        }
-    } else {
-        this->average_rms_tilde_03_av_resetFlag = 0;
-    }
-
-    if (this->average_rms_tilde_03_av_wantsReset == 1) {
-        this->average_rms_tilde_03_av_doReset();
-    }
-
-    this->average_rms_tilde_03_av_accum += x;
-    this->average_rms_tilde_03_av_buffer[(Index)this->average_rms_tilde_03_av_bufferPos] = x;
-    number bufferSize = this->average_rms_tilde_03_av_buffer->getSize();
-
-    if (this->average_rms_tilde_03_av_effectiveWindowSize < this->average_rms_tilde_03_av_currentWindowSize) {
-        this->average_rms_tilde_03_av_effectiveWindowSize++;
-    } else {
-        number bufferReadPos = this->average_rms_tilde_03_av_bufferPos - this->average_rms_tilde_03_av_effectiveWindowSize;
-
-        while (bufferReadPos < 0)
-            bufferReadPos += bufferSize;
-
-        this->average_rms_tilde_03_av_accum -= this->average_rms_tilde_03_av_buffer[(Index)bufferReadPos];
-    }
-
-    this->average_rms_tilde_03_av_bufferPos++;
-
-    if (this->average_rms_tilde_03_av_bufferPos >= bufferSize) {
-        this->average_rms_tilde_03_av_bufferPos -= bufferSize;
-    }
-
-    return this->average_rms_tilde_03_av_accum / this->average_rms_tilde_03_av_effectiveWindowSize;
-}
-
-void average_rms_tilde_03_av_setwindowsize(int wsize) {
-    wsize = trunc(wsize);
-
-    if (wsize != this->average_rms_tilde_03_av_currentWindowSize && wsize > 0 && wsize <= this->sr) {
-        this->average_rms_tilde_03_av_currentWindowSize = wsize;
-        this->average_rms_tilde_03_av_wantsReset = 1;
-    }
-}
-
-void average_rms_tilde_03_av_reset() {
-    this->average_rms_tilde_03_av_wantsReset = 1;
-}
-
-void average_rms_tilde_03_av_dspsetup() {
-    this->average_rms_tilde_03_av_wantsReset = 1;
-
-    if (this->sr > this->average_rms_tilde_03_av_buffer->getSize()) {
-        this->average_rms_tilde_03_av_buffer->setSize(this->sr + 1);
-        updateDataRef(this, this->average_rms_tilde_03_av_buffer);
-    }
-}
-
-void average_rms_tilde_03_av_doReset() {
-    this->average_rms_tilde_03_av_accum = 0;
-    this->average_rms_tilde_03_av_effectiveWindowSize = 0;
-    this->average_rms_tilde_03_av_bufferPos = 0;
-    this->average_rms_tilde_03_av_wantsReset = 0;
-}
-
-void average_rms_tilde_03_av_init() {
-    this->average_rms_tilde_03_av_currentWindowSize = this->sr;
-    this->average_rms_tilde_03_av_buffer->requestSize(this->sr + 1, 1);
-    this->average_rms_tilde_03_av_doReset();
-}
-
-void average_rms_tilde_03_dspsetup(bool force) {
-    if ((bool)(this->average_rms_tilde_03_setupDone) && (bool)(!(bool)(force)))
-        return;
-
-    this->average_rms_tilde_03_setupDone = true;
-    this->average_rms_tilde_03_av_dspsetup();
-}
-
 void param_03_getPresetValue(PatcherStateInterface& preset) {
     preset["value"] = this->param_03_value;
 }
@@ -3441,90 +3847,6 @@ void param_04_setPresetValue(PatcherStateInterface& preset) {
         return;
 
     this->param_04_value_set(preset["value"]);
-}
-
-number average_rms_tilde_04_av_next(number x, int windowSize, bool reset) {
-    if (windowSize > 0)
-        this->average_rms_tilde_04_av_setwindowsize(windowSize);
-
-    if (reset != 0) {
-        if (this->average_rms_tilde_04_av_resetFlag != 1) {
-            this->average_rms_tilde_04_av_wantsReset = 1;
-            this->average_rms_tilde_04_av_resetFlag = 1;
-        }
-    } else {
-        this->average_rms_tilde_04_av_resetFlag = 0;
-    }
-
-    if (this->average_rms_tilde_04_av_wantsReset == 1) {
-        this->average_rms_tilde_04_av_doReset();
-    }
-
-    this->average_rms_tilde_04_av_accum += x;
-    this->average_rms_tilde_04_av_buffer[(Index)this->average_rms_tilde_04_av_bufferPos] = x;
-    number bufferSize = this->average_rms_tilde_04_av_buffer->getSize();
-
-    if (this->average_rms_tilde_04_av_effectiveWindowSize < this->average_rms_tilde_04_av_currentWindowSize) {
-        this->average_rms_tilde_04_av_effectiveWindowSize++;
-    } else {
-        number bufferReadPos = this->average_rms_tilde_04_av_bufferPos - this->average_rms_tilde_04_av_effectiveWindowSize;
-
-        while (bufferReadPos < 0)
-            bufferReadPos += bufferSize;
-
-        this->average_rms_tilde_04_av_accum -= this->average_rms_tilde_04_av_buffer[(Index)bufferReadPos];
-    }
-
-    this->average_rms_tilde_04_av_bufferPos++;
-
-    if (this->average_rms_tilde_04_av_bufferPos >= bufferSize) {
-        this->average_rms_tilde_04_av_bufferPos -= bufferSize;
-    }
-
-    return this->average_rms_tilde_04_av_accum / this->average_rms_tilde_04_av_effectiveWindowSize;
-}
-
-void average_rms_tilde_04_av_setwindowsize(int wsize) {
-    wsize = trunc(wsize);
-
-    if (wsize != this->average_rms_tilde_04_av_currentWindowSize && wsize > 0 && wsize <= this->sr) {
-        this->average_rms_tilde_04_av_currentWindowSize = wsize;
-        this->average_rms_tilde_04_av_wantsReset = 1;
-    }
-}
-
-void average_rms_tilde_04_av_reset() {
-    this->average_rms_tilde_04_av_wantsReset = 1;
-}
-
-void average_rms_tilde_04_av_dspsetup() {
-    this->average_rms_tilde_04_av_wantsReset = 1;
-
-    if (this->sr > this->average_rms_tilde_04_av_buffer->getSize()) {
-        this->average_rms_tilde_04_av_buffer->setSize(this->sr + 1);
-        updateDataRef(this, this->average_rms_tilde_04_av_buffer);
-    }
-}
-
-void average_rms_tilde_04_av_doReset() {
-    this->average_rms_tilde_04_av_accum = 0;
-    this->average_rms_tilde_04_av_effectiveWindowSize = 0;
-    this->average_rms_tilde_04_av_bufferPos = 0;
-    this->average_rms_tilde_04_av_wantsReset = 0;
-}
-
-void average_rms_tilde_04_av_init() {
-    this->average_rms_tilde_04_av_currentWindowSize = this->sr;
-    this->average_rms_tilde_04_av_buffer->requestSize(this->sr + 1, 1);
-    this->average_rms_tilde_04_av_doReset();
-}
-
-void average_rms_tilde_04_dspsetup(bool force) {
-    if ((bool)(this->average_rms_tilde_04_setupDone) && (bool)(!(bool)(force)))
-        return;
-
-    this->average_rms_tilde_04_setupDone = true;
-    this->average_rms_tilde_04_av_dspsetup();
 }
 
 void param_05_getPresetValue(PatcherStateInterface& preset) {
@@ -3601,42 +3923,56 @@ void assign_defaults()
 {
     expr_01_in1 = 0;
     expr_01_out1 = 0;
-    snapshot_01_interval = 30;
+    snapshot_01_interval = 15;
     snapshot_01_out = 0;
     average_rms_tilde_01_x = 0;
     average_rms_tilde_01_windowSize = 2048;
     average_rms_tilde_01_reset = 0;
-    line_01_time = 0;
-    line_01_grain = 20;
-    line_01_output = 0;
     expr_02_in1 = 0;
     expr_02_out1 = 0;
-    param_01_value = 0;
-    expr_03_in1 = 0;
-    expr_03_out1 = 0;
-    snapshot_02_interval = 30;
+    snapshot_02_interval = 15;
     snapshot_02_out = 0;
     average_rms_tilde_02_x = 0;
     average_rms_tilde_02_windowSize = 2048;
     average_rms_tilde_02_reset = 0;
-    param_02_value = 0;
-    expr_04_$in1 = 0;
+    line_01_time = 0;
+    line_01_grain = 20;
+    line_01_output = 0;
+    expr_03_in1 = 0;
+    expr_03_out1 = 0;
+    param_01_value = 0;
+    expr_04_in1 = 0;
     expr_04_out1 = 0;
-    dspexpr_01_in1 = 0;
-    dspexpr_01_in2 = 0.707107;
+    snapshot_03_interval = 15;
+    snapshot_03_out = 0;
+    average_rms_tilde_03_x = 0;
+    average_rms_tilde_03_windowSize = 2048;
+    average_rms_tilde_03_reset = 0;
+    expr_05_in1 = 0;
+    expr_05_out1 = 0;
+    snapshot_04_interval = 15;
+    snapshot_04_out = 0;
+    average_rms_tilde_04_x = 0;
+    average_rms_tilde_04_windowSize = 2048;
+    average_rms_tilde_04_reset = 0;
+    param_02_value = 0;
+    expr_06_$in1 = 0;
+    expr_06_out1 = 0;
+    expr_07_in1 = 0;
+    expr_07_in2 = 0;
+    expr_07_out1 = 0;
     delaytilde_01_delay = 0;
+    dspexpr_01_in1 = 0;
+    dspexpr_01_in2 = 0;
     dspexpr_02_in1 = 0;
     dspexpr_02_in2 = 0;
     dspexpr_03_in1 = 0;
-    dspexpr_03_in2 = 0;
+    dspexpr_03_in2 = 0.707107;
     dspexpr_04_in1 = 0;
     dspexpr_04_in2 = 0.707107;
     dspexpr_05_in1 = 0;
     dspexpr_05_in2 = 0;
     delaytilde_02_delay = 0;
-    expr_05_in1 = 0;
-    expr_05_in2 = 0;
-    expr_05_out1 = 0;
     dspexpr_06_in1 = 0;
     dspexpr_06_in2 = 0;
     dspexpr_07_in1 = 0;
@@ -3645,46 +3981,37 @@ void assign_defaults()
     dspexpr_08_in1 = 0;
     dspexpr_08_in2 = 0;
     dspexpr_09_in1 = 0;
-    dspexpr_09_in2 = 0;
-    expr_06_in1 = 0;
-    expr_06_out1 = 0;
-    snapshot_03_interval = 30;
-    snapshot_03_out = 0;
-    average_rms_tilde_03_x = 0;
-    average_rms_tilde_03_windowSize = 2048;
-    average_rms_tilde_03_reset = 0;
+    dspexpr_09_in2 = 0.707107;
     dspexpr_10_in1 = 0;
     dspexpr_10_in2 = 0;
-    selector_02_onoff = 1;
     dspexpr_11_in1 = 0;
     dspexpr_11_in2 = 0;
+    selector_02_onoff = 1;
     dspexpr_12_in1 = 0;
     dspexpr_12_in2 = 0;
     dspexpr_13_in1 = 0;
-    dspexpr_13_in2 = 0.707107;
+    dspexpr_13_in2 = 0;
     dspexpr_14_in1 = 0;
     dspexpr_14_in2 = 0.707107;
-    expr_07_in1 = 0;
-    expr_07_in2 = 0;
-    expr_07_out1 = 0;
+    expr_08_in1 = 0;
+    expr_08_in2 = 0;
+    expr_08_out1 = 0;
     linetilde_01_time = 0;
     linetilde_01_keepramp = 0;
-    expr_08_in1 = 0;
-    expr_08_out1 = 0;
+    expr_09_in1 = 0;
+    expr_09_out1 = 0;
     param_03_value = 0;
+    slide_tilde_01_x = 0;
+    slide_tilde_01_up = 5000;
+    slide_tilde_01_down = 5000;
+    dspexpr_15_in1 = 0;
+    dspexpr_15_in2 = 0;
     line_02_time = 0;
     line_02_grain = 20;
     line_02_output = 0;
-    expr_09_in1 = 0;
-    expr_09_out1 = 0;
-    param_04_value = 0;
     expr_10_in1 = 0;
     expr_10_out1 = 0;
-    snapshot_04_interval = 30;
-    snapshot_04_out = 0;
-    average_rms_tilde_04_x = 0;
-    average_rms_tilde_04_windowSize = 2048;
-    average_rms_tilde_04_reset = 0;
+    param_04_value = 0;
     expr_11_$in1 = 0;
     expr_11_out1 = 0;
     param_05_value = 0;
@@ -3693,12 +4020,31 @@ void assign_defaults()
     param_06_value = 0;
     mstosamps_01_ms = 0;
     param_07_value = 0;
+    snapshot_05_interval = 15;
+    snapshot_05_out = 0;
+    dspexpr_16_in1 = 0;
+    dspexpr_16_in2 = 0;
     expr_13_$in1 = 0;
     expr_13_$in2 = 0;
     expr_13_out1 = 0;
     expr_14_$in1 = 0;
     expr_14_out1 = 0;
+    dspexpr_17_in1 = 0;
+    dspexpr_17_in2 = 0.0001;
+    slide_tilde_02_x = 0;
+    slide_tilde_02_up = 5000;
+    slide_tilde_02_down = 5000;
+    dspexpr_18_in1 = 0;
+    dspexpr_18_in2 = 0;
     param_08_value = 20;
+    snapshot_06_interval = 5;
+    snapshot_06_out = 0;
+    dspexpr_19_in1 = 0;
+    dspexpr_19_in2 = 0;
+    snapshot_07_interval = 5;
+    snapshot_07_out = 0;
+    dspexpr_20_in1 = 0;
+    dspexpr_20_in2 = 0;
     _currentTime = 0;
     audioProcessSampleCount = 0;
     sampleOffsetIntoNextAudioBuffer = 0;
@@ -3708,6 +4054,7 @@ void assign_defaults()
     signals[1] = nullptr;
     signals[2] = nullptr;
     signals[3] = nullptr;
+    signals[4] = nullptr;
     didAllocateSignals = 0;
     vs = 0;
     maxvs = 0;
@@ -3724,12 +4071,6 @@ void assign_defaults()
     average_rms_tilde_01_av_wantsReset = false;
     average_rms_tilde_01_av_resetFlag = false;
     average_rms_tilde_01_setupDone = false;
-    line_01_startTime = 0;
-    line_01_startValue = 0;
-    line_01_currentTarget = 0;
-    line_01_slope = 0;
-    line_01__time = 0;
-    param_01_lastValue = 0;
     snapshot_02_calc = 0;
     snapshot_02_nextTime = 0;
     snapshot_02_count = 0;
@@ -3741,6 +4082,34 @@ void assign_defaults()
     average_rms_tilde_02_av_wantsReset = false;
     average_rms_tilde_02_av_resetFlag = false;
     average_rms_tilde_02_setupDone = false;
+    line_01_startTime = 0;
+    line_01_startValue = 0;
+    line_01_currentTarget = 0;
+    line_01_slope = 0;
+    line_01__time = 0;
+    param_01_lastValue = 0;
+    snapshot_03_calc = 0;
+    snapshot_03_nextTime = 0;
+    snapshot_03_count = 0;
+    snapshot_03_lastValue = 0;
+    average_rms_tilde_03_av_currentWindowSize = 44100;
+    average_rms_tilde_03_av_accum = 0;
+    average_rms_tilde_03_av_effectiveWindowSize = 0;
+    average_rms_tilde_03_av_bufferPos = 0;
+    average_rms_tilde_03_av_wantsReset = false;
+    average_rms_tilde_03_av_resetFlag = false;
+    average_rms_tilde_03_setupDone = false;
+    snapshot_04_calc = 0;
+    snapshot_04_nextTime = 0;
+    snapshot_04_count = 0;
+    snapshot_04_lastValue = 0;
+    average_rms_tilde_04_av_currentWindowSize = 44100;
+    average_rms_tilde_04_av_accum = 0;
+    average_rms_tilde_04_av_effectiveWindowSize = 0;
+    average_rms_tilde_04_av_bufferPos = 0;
+    average_rms_tilde_04_av_wantsReset = false;
+    average_rms_tilde_04_av_resetFlag = false;
+    average_rms_tilde_04_setupDone = false;
     param_02_lastValue = 0;
     delaytilde_01_lastDelay = -1;
     delaytilde_01_crossfadeDelay = 0;
@@ -3762,40 +4131,32 @@ void assign_defaults()
     delaytilde_02_del_reader = 0;
     delaytilde_02_del_writer = 0;
     delaytilde_02_setupDone = false;
-    snapshot_03_calc = 0;
-    snapshot_03_nextTime = 0;
-    snapshot_03_count = 0;
-    snapshot_03_lastValue = 0;
-    average_rms_tilde_03_av_currentWindowSize = 44100;
-    average_rms_tilde_03_av_accum = 0;
-    average_rms_tilde_03_av_effectiveWindowSize = 0;
-    average_rms_tilde_03_av_bufferPos = 0;
-    average_rms_tilde_03_av_wantsReset = false;
-    average_rms_tilde_03_av_resetFlag = false;
-    average_rms_tilde_03_setupDone = false;
     linetilde_01_currentValue = 0;
     param_03_lastValue = 0;
+    slide_tilde_01_prev = 0;
     line_02_startTime = 0;
     line_02_startValue = 0;
     line_02_currentTarget = 0;
     line_02_slope = 0;
     line_02__time = 0;
     param_04_lastValue = 0;
-    snapshot_04_calc = 0;
-    snapshot_04_nextTime = 0;
-    snapshot_04_count = 0;
-    snapshot_04_lastValue = 0;
-    average_rms_tilde_04_av_currentWindowSize = 44100;
-    average_rms_tilde_04_av_accum = 0;
-    average_rms_tilde_04_av_effectiveWindowSize = 0;
-    average_rms_tilde_04_av_bufferPos = 0;
-    average_rms_tilde_04_av_wantsReset = false;
-    average_rms_tilde_04_av_resetFlag = false;
-    average_rms_tilde_04_setupDone = false;
     param_05_lastValue = 0;
     param_06_lastValue = 0;
     param_07_lastValue = 0;
+    snapshot_05_calc = 0;
+    snapshot_05_nextTime = 0;
+    snapshot_05_count = 0;
+    snapshot_05_lastValue = 0;
+    slide_tilde_02_prev = 0;
     param_08_lastValue = 0;
+    snapshot_06_calc = 0;
+    snapshot_06_nextTime = 0;
+    snapshot_06_count = 0;
+    snapshot_06_lastValue = 0;
+    snapshot_07_calc = 0;
+    snapshot_07_nextTime = 0;
+    snapshot_07_count = 0;
+    snapshot_07_lastValue = 0;
     globaltransport_tempo = nullptr;
     globaltransport_state = nullptr;
     stackprotect_count = 0;
@@ -3813,26 +4174,43 @@ void assign_defaults()
     number average_rms_tilde_01_x;
     number average_rms_tilde_01_windowSize;
     number average_rms_tilde_01_reset;
-    list line_01_target;
-    number line_01_time;
-    number line_01_grain;
-    number line_01_output;
     number expr_02_in1;
     number expr_02_out1;
-    number param_01_value;
-    number expr_03_in1;
-    number expr_03_out1;
     number snapshot_02_interval;
     number snapshot_02_out;
     number average_rms_tilde_02_x;
     number average_rms_tilde_02_windowSize;
     number average_rms_tilde_02_reset;
-    number param_02_value;
-    number expr_04_$in1;
+    list line_01_target;
+    number line_01_time;
+    number line_01_grain;
+    number line_01_output;
+    number expr_03_in1;
+    number expr_03_out1;
+    number param_01_value;
+    number expr_04_in1;
     number expr_04_out1;
+    number snapshot_03_interval;
+    number snapshot_03_out;
+    number average_rms_tilde_03_x;
+    number average_rms_tilde_03_windowSize;
+    number average_rms_tilde_03_reset;
+    number expr_05_in1;
+    number expr_05_out1;
+    number snapshot_04_interval;
+    number snapshot_04_out;
+    number average_rms_tilde_04_x;
+    number average_rms_tilde_04_windowSize;
+    number average_rms_tilde_04_reset;
+    number param_02_value;
+    number expr_06_$in1;
+    number expr_06_out1;
+    number expr_07_in1;
+    number expr_07_in2;
+    number expr_07_out1;
+    number delaytilde_01_delay;
     number dspexpr_01_in1;
     number dspexpr_01_in2;
-    number delaytilde_01_delay;
     number dspexpr_02_in1;
     number dspexpr_02_in2;
     number dspexpr_03_in1;
@@ -3842,9 +4220,6 @@ void assign_defaults()
     number dspexpr_05_in1;
     number dspexpr_05_in2;
     number delaytilde_02_delay;
-    number expr_05_in1;
-    number expr_05_in2;
-    number expr_05_out1;
     number dspexpr_06_in1;
     number dspexpr_06_in2;
     number dspexpr_07_in1;
@@ -3854,47 +4229,38 @@ void assign_defaults()
     number dspexpr_08_in2;
     number dspexpr_09_in1;
     number dspexpr_09_in2;
-    number expr_06_in1;
-    number expr_06_out1;
-    number snapshot_03_interval;
-    number snapshot_03_out;
-    number average_rms_tilde_03_x;
-    number average_rms_tilde_03_windowSize;
-    number average_rms_tilde_03_reset;
     number dspexpr_10_in1;
     number dspexpr_10_in2;
-    number selector_02_onoff;
     number dspexpr_11_in1;
     number dspexpr_11_in2;
+    number selector_02_onoff;
     number dspexpr_12_in1;
     number dspexpr_12_in2;
     number dspexpr_13_in1;
     number dspexpr_13_in2;
     number dspexpr_14_in1;
     number dspexpr_14_in2;
-    number expr_07_in1;
-    number expr_07_in2;
-    number expr_07_out1;
+    number expr_08_in1;
+    number expr_08_in2;
+    number expr_08_out1;
     list linetilde_01_segments;
     number linetilde_01_time;
     number linetilde_01_keepramp;
-    number expr_08_in1;
-    number expr_08_out1;
+    number expr_09_in1;
+    number expr_09_out1;
     number param_03_value;
+    number slide_tilde_01_x;
+    number slide_tilde_01_up;
+    number slide_tilde_01_down;
+    number dspexpr_15_in1;
+    number dspexpr_15_in2;
     list line_02_target;
     number line_02_time;
     number line_02_grain;
     number line_02_output;
-    number expr_09_in1;
-    number expr_09_out1;
-    number param_04_value;
     number expr_10_in1;
     number expr_10_out1;
-    number snapshot_04_interval;
-    number snapshot_04_out;
-    number average_rms_tilde_04_x;
-    number average_rms_tilde_04_windowSize;
-    number average_rms_tilde_04_reset;
+    number param_04_value;
     number expr_11_$in1;
     number expr_11_out1;
     number param_05_value;
@@ -3903,18 +4269,37 @@ void assign_defaults()
     number param_06_value;
     number mstosamps_01_ms;
     number param_07_value;
+    number snapshot_05_interval;
+    number snapshot_05_out;
+    number dspexpr_16_in1;
+    number dspexpr_16_in2;
     number expr_13_$in1;
     number expr_13_$in2;
     number expr_13_out1;
     number expr_14_$in1;
     number expr_14_out1;
+    number dspexpr_17_in1;
+    number dspexpr_17_in2;
+    number slide_tilde_02_x;
+    number slide_tilde_02_up;
+    number slide_tilde_02_down;
+    number dspexpr_18_in1;
+    number dspexpr_18_in2;
     number param_08_value;
+    number snapshot_06_interval;
+    number snapshot_06_out;
+    number dspexpr_19_in1;
+    number dspexpr_19_in2;
+    number snapshot_07_interval;
+    number snapshot_07_out;
+    number dspexpr_20_in1;
+    number dspexpr_20_in2;
     MillisecondTime _currentTime;
     UInt64 audioProcessSampleCount;
     SampleIndex sampleOffsetIntoNextAudioBuffer;
     signal zeroBuffer;
     signal dummyBuffer;
-    SampleValue * signals[4];
+    SampleValue * signals[5];
     bool didAllocateSignals;
     Index vs;
     Index maxvs;
@@ -3932,13 +4317,6 @@ void assign_defaults()
     bool average_rms_tilde_01_av_resetFlag;
     Float64BufferRef average_rms_tilde_01_av_buffer;
     bool average_rms_tilde_01_setupDone;
-    MillisecondTime line_01_startTime;
-    number line_01_startValue;
-    number line_01_currentTarget;
-    number line_01_slope;
-    MillisecondTime line_01__time;
-    list line_01_pendingRamps;
-    number param_01_lastValue;
     number snapshot_02_calc;
     number snapshot_02_nextTime;
     SampleIndex snapshot_02_count;
@@ -3951,6 +4329,37 @@ void assign_defaults()
     bool average_rms_tilde_02_av_resetFlag;
     Float64BufferRef average_rms_tilde_02_av_buffer;
     bool average_rms_tilde_02_setupDone;
+    MillisecondTime line_01_startTime;
+    number line_01_startValue;
+    number line_01_currentTarget;
+    number line_01_slope;
+    MillisecondTime line_01__time;
+    list line_01_pendingRamps;
+    number param_01_lastValue;
+    number snapshot_03_calc;
+    number snapshot_03_nextTime;
+    SampleIndex snapshot_03_count;
+    number snapshot_03_lastValue;
+    int average_rms_tilde_03_av_currentWindowSize;
+    number average_rms_tilde_03_av_accum;
+    int average_rms_tilde_03_av_effectiveWindowSize;
+    int average_rms_tilde_03_av_bufferPos;
+    bool average_rms_tilde_03_av_wantsReset;
+    bool average_rms_tilde_03_av_resetFlag;
+    Float64BufferRef average_rms_tilde_03_av_buffer;
+    bool average_rms_tilde_03_setupDone;
+    number snapshot_04_calc;
+    number snapshot_04_nextTime;
+    SampleIndex snapshot_04_count;
+    number snapshot_04_lastValue;
+    int average_rms_tilde_04_av_currentWindowSize;
+    number average_rms_tilde_04_av_accum;
+    int average_rms_tilde_04_av_effectiveWindowSize;
+    int average_rms_tilde_04_av_bufferPos;
+    bool average_rms_tilde_04_av_wantsReset;
+    bool average_rms_tilde_04_av_resetFlag;
+    Float64BufferRef average_rms_tilde_04_av_buffer;
+    bool average_rms_tilde_04_setupDone;
     number param_02_lastValue;
     number delaytilde_01_lastDelay;
     number delaytilde_01_crossfadeDelay;
@@ -3974,21 +4383,10 @@ void assign_defaults()
     Int delaytilde_02_del_reader;
     Int delaytilde_02_del_writer;
     bool delaytilde_02_setupDone;
-    number snapshot_03_calc;
-    number snapshot_03_nextTime;
-    SampleIndex snapshot_03_count;
-    number snapshot_03_lastValue;
-    int average_rms_tilde_03_av_currentWindowSize;
-    number average_rms_tilde_03_av_accum;
-    int average_rms_tilde_03_av_effectiveWindowSize;
-    int average_rms_tilde_03_av_bufferPos;
-    bool average_rms_tilde_03_av_wantsReset;
-    bool average_rms_tilde_03_av_resetFlag;
-    Float64BufferRef average_rms_tilde_03_av_buffer;
-    bool average_rms_tilde_03_setupDone;
     list linetilde_01_activeRamps;
     number linetilde_01_currentValue;
     number param_03_lastValue;
+    number slide_tilde_01_prev;
     MillisecondTime line_02_startTime;
     number line_02_startValue;
     number line_02_currentTarget;
@@ -3996,31 +4394,32 @@ void assign_defaults()
     MillisecondTime line_02__time;
     list line_02_pendingRamps;
     number param_04_lastValue;
-    number snapshot_04_calc;
-    number snapshot_04_nextTime;
-    SampleIndex snapshot_04_count;
-    number snapshot_04_lastValue;
-    int average_rms_tilde_04_av_currentWindowSize;
-    number average_rms_tilde_04_av_accum;
-    int average_rms_tilde_04_av_effectiveWindowSize;
-    int average_rms_tilde_04_av_bufferPos;
-    bool average_rms_tilde_04_av_wantsReset;
-    bool average_rms_tilde_04_av_resetFlag;
-    Float64BufferRef average_rms_tilde_04_av_buffer;
-    bool average_rms_tilde_04_setupDone;
     number param_05_lastValue;
     number param_06_lastValue;
     number param_07_lastValue;
+    number snapshot_05_calc;
+    number snapshot_05_nextTime;
+    SampleIndex snapshot_05_count;
+    number snapshot_05_lastValue;
+    number slide_tilde_02_prev;
     number param_08_lastValue;
+    number snapshot_06_calc;
+    number snapshot_06_nextTime;
+    SampleIndex snapshot_06_count;
+    number snapshot_06_lastValue;
+    number snapshot_07_calc;
+    number snapshot_07_nextTime;
+    SampleIndex snapshot_07_count;
+    number snapshot_07_lastValue;
     signal globaltransport_tempo;
     signal globaltransport_state;
     number stackprotect_count;
     DataRef average_rms_tilde_01_av_bufferobj;
     DataRef average_rms_tilde_02_av_bufferobj;
-    DataRef delaytilde_01_del_bufferobj;
-    DataRef delaytilde_02_del_bufferobj;
     DataRef average_rms_tilde_03_av_bufferobj;
     DataRef average_rms_tilde_04_av_bufferobj;
+    DataRef delaytilde_01_del_bufferobj;
+    DataRef delaytilde_02_del_bufferobj;
     Index _voiceIndex;
     Int _noteNumber;
     Index isMuted;

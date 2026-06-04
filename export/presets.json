@@ -9,7 +9,7 @@
         "value": 0
       },
       "mid_gain": {
-        "value": -8
+        "value": 0
       },
       "mid_mute": {
         "value": 0
@@ -21,7 +21,7 @@
         "value": 0
       },
       "side_mute": {
-        "value": 1
+        "value": 0
       },
       "temperature": {
         "value": 20

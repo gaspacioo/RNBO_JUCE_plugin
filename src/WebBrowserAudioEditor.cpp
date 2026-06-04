@@ -124,7 +124,7 @@ WebBrowserAudioEditor::WebBrowserAudioEditor (CustomAudioProcessor* const p,
 
     setResizable (true, true);
     setResizeLimits (260, 300, 720, 900);
-    setSize (560, 400);
+    setSize (560, 500);
 
     startTimerHz (60);
 }
@@ -168,6 +168,9 @@ void WebBrowserAudioEditor::sendMeterLevelsToWebView()
     payload->setProperty ("outPeakR",  levels.outPeakR.load (std::memory_order_relaxed));
     payload->setProperty ("delayTime", levels.delayTime.load (std::memory_order_relaxed));
     payload->setProperty ("sampleRate", _audioProcessor->getSampleRate());
+    payload->setProperty ("correlationValue", levels.correlationValue.load (std::memory_order_relaxed));
+    payload->setProperty ("scopeX", levels.scopeX.load (std::memory_order_relaxed));
+    payload->setProperty ("scopeY", levels.scopeY.load (std::memory_order_relaxed));
 
     _webComponent.emitEventIfBrowserIsVisible ("meterLevels", var (payload.get()));
 }

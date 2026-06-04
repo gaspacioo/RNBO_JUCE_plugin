@@ -183,15 +183,11 @@
   "inports": [],
   "outports": [
     {
-      "tag": "in_rms_L",
-      "meta": ""
-    },
-    {
-      "tag": "in_rms_R",
-      "meta": ""
-    },
-    {
       "tag": "out_rms_L",
+      "meta": ""
+    },
+    {
+      "tag": "in_rms_L",
       "meta": ""
     },
     {
@@ -199,7 +195,23 @@
       "meta": ""
     },
     {
+      "tag": "in_rms_R",
+      "meta": ""
+    },
+    {
+      "tag": "correlation_value",
+      "meta": ""
+    },
+    {
       "tag": "delay_time",
+      "meta": ""
+    },
+    {
+      "tag": "scopeY",
+      "meta": ""
+    },
+    {
+      "tag": "scopeX",
       "meta": ""
     }
   ],

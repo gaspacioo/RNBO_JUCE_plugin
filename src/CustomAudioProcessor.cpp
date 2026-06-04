@@ -179,7 +179,13 @@ void CustomAudioProcessor::handleMessageEvent (const RNBO::MessageEvent& event)
             meterLevels.outR.store (value, std::memory_order_relaxed);
         else if (tag == tagDelayTime)
             meterLevels.delayTime.store (value, std::memory_order_relaxed);
+        else if (tag == tagCorrelationValue)
+            meterLevels.correlationValue.store (value, std::memory_order_relaxed);
+        else if (tag == tagScopeX)
+            meterLevels.scopeX.store (value, std::memory_order_relaxed);
+        else if (tag == tagScopeY)
+            meterLevels.scopeY.store (value, std::memory_order_relaxed);
     }
-
+    
     RNBO::EventHandler::handleMessageEvent (event);
 }

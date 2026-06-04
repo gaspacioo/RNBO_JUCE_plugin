@@ -147,6 +147,10 @@ const DIST_RANGE = { start: DIST_MIN, end: DIST_MAX, skew: 1 };
 
 const clipHold = { input: null, output: null };
 
+let correlationValue = 0;
+let scopeX = 0;
+let scopeY = 0;
+
 function setupAboutMenu() {
     const modal = document.getElementById("aboutModal");
     const infoBtn = document.getElementById("infoBtn");
@@ -334,6 +338,70 @@ function parseMeterPayload(data) {
         }
     }
     return data;
+}
+
+function updateCorrelationUI(val) {
+    const bar = document.getElementById('correlationBar');
+    if (!bar) return;
+
+    // 1. Assicuriamoci che il valore sia compreso tra -1 e 1
+    const clampedVal = Math.max(-1, Math.min(1, val));
+    
+    // 2. Calcoliamo l'intensità (da 0 a 1)
+    const absVal = Math.abs(clampedVal);
+    
+    // 3. La larghezza massima verso un lato è il 50% del contenitore totale
+    const widthPercent = absVal * 50;
+
+    // 4. Posizionamento: se negativo va a sinistra del centro, se positivo a destra
+    if (clampedVal < 0) {
+        // Estensione verso sinistra: il punto di partenza si sposta indietro
+        bar.style.left = (50 - widthPercent) + '%';
+        bar.style.width = widthPercent + '%';
+    } else {
+        // Estensione verso destra: il punto di partenza è fisso al 50%
+        bar.style.left = '50%';
+        bar.style.width = widthPercent + '%';
+    }
+
+    // 5. Calcolo del colore dinamico
+    // absVal = 0   => r: 0,   g: 255 (Verde puro al centro)
+    // absVal = 1   => r: 255, g: 0   (Rosso puro agli estremi)
+    const r = Math.round(absVal * 255);
+    const g = Math.round((1 - absVal) * 255);
+    
+    bar.style.backgroundColor = `rgb(${r}, ${g}, 0)`;
+}
+
+function drawVectorscope() {
+    const canvas = document.getElementById('vectorscopeCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    // 1. EFFETTO SCIA: Invece di clearRect, disegniamo il background con opacità bassa
+    // L'hex #0f0f0f corrisponde a rgb(15, 15, 15). Usiamo un alpha di 0.15 o 0.2
+    ctx.fillStyle = 'rgba(15, 15, 15, 0.15)'; 
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 2. Assicurati che le variabili scopeX e scopeY siano valorizzate
+    if (typeof scopeX !== 'undefined' && typeof scopeY !== 'undefined') {
+        // Mappatura da valori RNBO (solitamente -1 a +1) alle coordinate del canvas
+        // (Adattala se i tuoi valori da RNBO hanno un range diverso)
+        const x = (scopeX + 1) * 0.5 * canvas.width;
+        
+        // Invertiamo l'asse Y perché nel canvas lo 0 è in alto
+        const y = (1 - scopeY) * 0.5 * canvas.height;
+
+        // 3. Disegna il punto del nuovo campione (uso il colore dorato del tuo CSS)
+        ctx.fillStyle = 'rgb(194, 146, 68)';
+        ctx.beginPath();
+        // Disegna un cerchio di 1.5px per essere preciso ma visibile
+        ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Richiama l'animazione al prossimo frame
+    requestAnimationFrame(drawVectorscope);
 }
 
 // ===== CORE LOGIC: SLIDER E PARAMETRI =====
@@ -772,11 +840,21 @@ function wireMeters() {
                 'outputClip', 'output', data.outL, data.outR, data.outPeakL, data.outPeakR
             );
             setDelayTime(data.delayTime, data.sampleRate);
+
+            if (data.correlationValue !== undefined) {
+                updateCorrelationUI(data.correlationValue);
+            }
+            
+            if (data.scopeX !== undefined && data.scopeY !== undefined) {
+                scopeX = data.scopeX;
+                scopeY = data.scopeY;
+            }
         });
         debugLog('✓ meterLevels event listener added', 'SUCCESS');
     } catch (e) {
         debugLog(`✗ Error adding meterLevels listener: ${e.message}`, 'ERROR');
     }
+    drawVectorscope();
 }
 
 function init() {
