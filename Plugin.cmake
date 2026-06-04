@@ -128,10 +128,10 @@ target_link_libraries(RNBOAudioPlugin
 if(APPLE)
   install(
     TARGETS RNBOAudioPlugin_VST3
-    DESTINATION /Library/Audio/Plug-Ins/VST3/
+    DESTINATION ~/Library/Audio/Plug-Ins/VST3/
     )
   install(
     TARGETS RNBOAudioPlugin_AU
-    DESTINATION /Library/Audio/Plug-Ins/Components/
+    DESTINATION ~/Library/Audio/Plug-Ins/Components/
     )
 endif()

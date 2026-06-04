@@ -40,7 +40,7 @@ body {
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    gap: 66px;
+    gap: 46px;
     flex: 0 0 auto;
 }
 
@@ -168,6 +168,21 @@ body {
 }
 
 /* ==========================================================================
+   VOLUME SECTION (FADER + TOGGLE)
+   ========================================================================== */
+.volume-section {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.volume-spacer {
+    margin-left: 32px;
+}
+
+/* ==========================================================================
    VOLUME FADER (ROTATED SLIDER)
    ========================================================================== */
 .volume {
@@ -198,7 +213,9 @@ body {
     margin-top: 5px;
 }
 
-#gainSlider {
+#gainSlider,
+#midGainSlider,
+#sideGainSlider {
     -webkit-appearance: none;
     appearance: none;
     position: absolute;
@@ -210,11 +227,13 @@ body {
     border: 1px solid #333;
     border-radius: 2px;
     outline: none;
-    transform: translate(-50%, -50%) rotate(270deg); 
+    transform: translate(-50%, -50%) rotate(270deg);
     cursor: pointer;
 }
 
-#gainSlider::-webkit-slider-thumb {
+#gainSlider::-webkit-slider-thumb,
+#midGainSlider::-webkit-slider-thumb,
+#sideGainSlider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 14px;
@@ -226,7 +245,9 @@ body {
     background-image: linear-gradient(to right, transparent 45%, #e74c3c 45%, #e74c3c 55%, transparent 55%);
 }
 
-#gainSlider::-moz-range-thumb {
+#gainSlider::-moz-range-thumb,
+#midGainSlider::-moz-range-thumb,
+#sideGainSlider::-moz-range-thumb {
     width: 14px;
     height: 22px;
     background: #cccccc;
@@ -236,11 +257,15 @@ body {
     background-image: linear-gradient(to right, transparent 45%, #e74c3c 45%, #e74c3c 55%, transparent 55%);
 }
 
-#gainSlider:active::-webkit-slider-thumb {
+#gainSlider:active::-webkit-slider-thumb,
+#midGainSlider:active::-webkit-slider-thumb,
+#sideGainSlider:active::-webkit-slider-thumb {
     background-color: #eeeeee;
 }
 
-#gainValue {
+#gainValue,
+#midGainValue,
+#sideGainValue {
     width: 56px;
     height: 12px;
     font-family: ui-monospace, 'SF Mono', Menlo, monospace;
@@ -249,6 +274,35 @@ body {
     text-align: center;
     opacity: 0.85;
     line-height: 12px;
+}
+
+.mute-toggle {
+    background: none;
+    border: none;
+    color: inherit;
+    font-family: inherit;
+    cursor: pointer;
+    padding: 0;
+    
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    opacity: 0.7;
+    line-height: 12px;
+    height: 12px;
+    transition: all 0.2s ease;
+}
+
+.mute-toggle:hover {
+    opacity: 1;
+    color: #ffffff;
+}
+
+/* Stato Mute Attivo */
+.mute-toggle.muted {
+    color: #555555;
+    opacity: 0.5;
+    text-decoration: line-through; /* Riga che taglia la scritta per indicare il Mute */
 }
 
 /* ==========================================================================
@@ -385,7 +439,98 @@ body {
 }
 
 /* ==========================================================================
-   JPEG COMPANY LOGO BUTTON 
+   PHASE INVERSION TOGGLE (LARGE - in phase-controls)
+   ========================================================================== */
+.phase-toggle {
+    width: 100%;
+    height: 28px;
+    background: #0f0f0f;
+    border: 1px solid #333333;
+    border-radius: 3px;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.phase-toggle::before {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: #555555;
+    border-radius: 2px;
+    transition: all 0.15s ease;
+}
+
+.phase-toggle:hover {
+    background: #131313;
+    border-color: rgb(194, 146, 68);
+}
+
+.phase-toggle:active {
+    background: #0a0a0a;
+}
+
+.phase-toggle.active::before {
+    background: rgb(194, 146, 68);
+    box-shadow: 0 0 8px rgba(194, 146, 68, 0.4);
+}
+
+.phase-toggle:focus {
+    outline: none;
+    border-color: rgb(194, 146, 68);
+    box-shadow: 0 0 6px rgba(194, 146, 68, 0.2);
+}
+
+/* ==========================================================================
+   PHASE INVERSION TOGGLE (SMALL - accanto al volume)
+   ========================================================================== */
+.phase-toggle-small {
+    width: 28px;
+    height: 28px;
+    background: #0f0f0f;
+    border: 1px solid #333333;
+    border-radius: 3px;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.9rem;
+    color: #555555;
+    flex: 0 0 28px;
+    align-self: center;
+}
+
+.phase-toggle-small:hover {
+    background: #131313;
+    border-color: rgb(194, 146, 68);
+}
+
+.phase-toggle-small:active {
+    background: #0a0a0a;
+}
+
+.phase-toggle-small.active {
+    color: rgb(194, 146, 68);
+    box-shadow: inset 0 0 8px rgba(194, 146, 68, 0.3);
+}
+
+.phase-toggle-small:focus {
+    outline: none;
+    border-color: rgb(194, 146, 68);
+    box-shadow: 0 0 6px rgba(194, 146, 68, 0.2);
+}
+
+/* ==========================================================================
+   JPEG COMPANY LOGO BUTTON
    ========================================================================== */
 .info-button {
   position: absolute;

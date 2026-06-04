@@ -1,7 +1,7 @@
 import * as Juce from "juce-framework-frontend";
 
 // ===== DEBUG WINDOW =====
-const DEBUG_ENABLED = false;
+const DEBUG_ENABLED = true;
 const DEBUG_LOGS = [];
 const MAX_LOGS = 50;
 
@@ -119,6 +119,16 @@ const GAIN_MIN_DB = -60;
 const GAIN_MAX_DB = 12;
 const GAIN_DEFAULT_DB = 0;
 const GAIN_STEP_DB = 0.1;
+
+const MID_GAIN_MIN_DB = -60;
+const MID_GAIN_MAX_DB = 12;
+const MID_GAIN_DEFAULT_DB = 0;
+const MID_GAIN_STEP_DB = 0.1;
+
+const SIDE_GAIN_MIN_DB = -60;
+const SIDE_GAIN_MAX_DB = 12;
+const SIDE_GAIN_DEFAULT_DB = 0;
+const SIDE_GAIN_STEP_DB = 0.1;
 
 const PARAM_RANGE_MIN_SPAN = 1.5;
 
@@ -327,17 +337,17 @@ function parseMeterPayload(data) {
 }
 
 // ===== CORE LOGIC: SLIDER E PARAMETRI =====
-function wireGain() {
+function wireGain({ paramId, sliderId, labelId, minDb, maxDb, stepDb, defaultDb }) {
     debugLog('wireGain: Starting...');
 
     const platform = navigator.platform.toLowerCase();
     const isWindows = platform.includes('win');
     debugLog(`Platform detected: ${platform} (Windows: ${isWindows})`);
 
-    const slider = document.getElementById('gainSlider');
-    const label = document.getElementById('gainValue');
+    const slider = document.getElementById(sliderId);
+    const label = document.getElementById(labelId);
     if (!slider || !label) {
-        debugLog('✗ gainSlider or gainValue element not found', 'ERROR');
+        debugLog(`✗ ${sliderId} or ${labelId} element not found`, 'ERROR');
         return;
     }
 
@@ -345,9 +355,9 @@ function wireGain() {
 
     let state = null;
     try {
-        state = Juce.getSliderState('gain');
+        state = Juce.getSliderState(paramId);
     } catch (e) {
-        debugLog(`✗ Error getting slider state: ${e.message}`, 'ERROR');
+        debugLog(`✗ Error getting slider state for ${paramId}: ${e.message}`, 'ERROR');
         return;
     }
 
@@ -357,19 +367,19 @@ function wireGain() {
     }
 
     debugLog('✓ Slider state obtained', 'SUCCESS');
-
-    // Imposta correttamente i limiti reali in dB sulla barra visiva HTML
-    slider.min = String(GAIN_MIN_DB);
-    slider.max = String(GAIN_MAX_DB);
-    slider.step = String(GAIN_STEP_DB);
+    
+    const fallbackRange = { start: minDb, end: maxDb, skew: 1 };
+    slider.min = String(minDb);
+    slider.max = String(maxDb);
+    slider.step = String(stepDb);
 
     const sync = () => {
         try {
-            const range = getGainRange(state);
+            const range = getParamRange(state, fallbackRange);
 
             // Legge il valore 0-1 da JUCE e lo mappa nella scala reale dB del tuo algoritmo
             const norm = state.getNormalisedValue();
-            const db = clampGainDb(normalisedToDb(norm, range));
+            const db = Math.max(minDb, Math.min(maxDb, normalisedToDb(norm, range)));
 
             debugLog(`sync() from C++ - normalized: ${norm.toFixed(4)}, dB: ${db.toFixed(1)}`);
 
@@ -386,15 +396,14 @@ function wireGain() {
 
     const setGainDb = (db) => {
         try {
-            const range = getGainRange(state);
+            const range = getParamRange(state, fallbackRange);
             const normalised = dbToNormalised(db, range);
 
             debugLog(`setGainDb: User input: ${db.toFixed(1)} dB -> Normalised: ${normalised.toFixed(4)}`);
 
-            // Invia al C++ il valore normalizzato corretto (0.0 -> 1.0)
             state.setNormalisedValue(normalised);
 
-            label.textContent = clampGainDb(db).toFixed(1) + ' dB';
+            label.textContent = Math.max(range.start, Math.min(range.end, db)).toFixed(1) + ' dB';
         } catch (e) {
             debugLog(`✗ Error in setGainDb: ${e.message}`, 'ERROR');
         }
@@ -414,7 +423,11 @@ function wireGain() {
         debugLog(`✗ Error adding event listeners: ${e.message}`, 'ERROR');
     }
 
-    sync();
+    // Delay iniziale per dare tempo al backend di stabilizzarsi
+    setTimeout(() => {
+        debugLog(`Performing delayed sync for ${paramId}...`);
+        sync();
+    }, 50);
 
     // Gestione dei gesti per i blocchi di automazione DAW
     slider.addEventListener('mousedown', () => {
@@ -438,7 +451,7 @@ function wireGain() {
     slider.addEventListener('dblclick', (event) => {
         event.preventDefault();
         debugLog('Slider double-clicked, resetting to default (0 dB)');
-        setGainDb(GAIN_DEFAULT_DB);
+        setGainDb(defaultDb);
         sync();
     });
 
@@ -598,6 +611,12 @@ function wirePhaseControls() {
         step: DIST_STEP,
         defaultValue: DIST_DEFAULT,
     });
+
+    wireToggleParameter({
+        paramId: 'phase_inv',
+        buttonId: 'phaseToggleBtn',
+        activeClass: 'active'
+    });
 }
 
 function setDelayTime(delayValue, sampleRate) {
@@ -610,6 +629,123 @@ function setDelayTime(delayValue, sampleRate) {
         text += ` (${Math.round(samples)} sa)`;
     }
     delayLabel.textContent = text;
+}
+
+function wireToggleParameter({ paramId, buttonId, activeClass = 'active' }) {
+    debugLog(`wireToggleParameter(${paramId}): Starting via getToggleState...`);
+
+    const button = document.getElementById(buttonId);
+    if (!button) {
+        debugLog(`✗ ${buttonId} element not found`, 'ERROR');
+        return;
+    }
+
+    let state = null;
+    try {
+        // Utilizziamo il metodo nativo del framework JUCE 8 / RNBO Template
+        state = Juce.getToggleState(paramId);
+    } catch (e) {
+        debugLog(`✗ Error getting ${paramId} toggle state: ${e.message}`, 'ERROR');
+        return;
+    }
+
+    if (!state) {
+        debugLog(`✗ getToggleState returned null for ${paramId}`, 'ERROR');
+        return;
+    }
+
+    // Sincronizza lo stato del bottone HTML con il valore booleano del backend
+    const sync = () => {
+        try {
+            // getToggleState espone direttamente un valore booleano (true/false)
+            const isActive = state.getValue();
+
+            debugLog(`sync() ${paramId} - isActive: ${isActive}`);
+
+            if (isActive) {
+                button.classList.add(activeClass);
+                button.setAttribute('aria-checked', 'true');
+            } else {
+                button.classList.remove(activeClass);
+                button.setAttribute('aria-checked', 'false');
+            }
+        } catch (e) {
+            debugLog(`✗ Error syncing ${paramId}: ${e.message}`, 'ERROR');
+        }
+    };
+
+    // Inverte lo stato booleano al click
+    const toggle = () => {
+        try {
+            const currentState = state.getValue();
+            const newValue = !currentState;
+
+            // Invia il nuovo stato booleano al backend C++
+            state.setValue(newValue);
+
+            debugLog(`toggle ${paramId}: Sent value ${newValue}`);
+        } catch (e) {
+            debugLog(`✗ Error toggling ${paramId}: ${e.message}`, 'ERROR');
+        }
+    };
+
+    try {
+        // Ascolta i cambiamenti provenienti dalla DAW o dal backend
+        state.valueChangedEvent.addListener(sync);
+        state.propertiesChangedEvent.addListener(sync);
+        debugLog(`✓ Event listeners added for toggle ${paramId}`, 'SUCCESS');
+    } catch (e) {
+        debugLog(`✗ Error adding ${paramId} toggle listeners: ${e.message}`, 'ERROR');
+    }
+
+    // Esegui la sincronizzazione iniziale con un piccolo delay per dare tempo al backend
+    setTimeout(() => {
+        debugLog(`Performing delayed sync for ${paramId}...`);
+        sync();
+    }, 50);
+
+    // Incolla l'evento click del mouse
+    button.addEventListener('click', toggle);
+
+    debugLog(`✓ wireToggleParameter(${paramId}) completed successfully`, 'SUCCESS');
+}
+
+function wireMSMatrix() {
+    debugLog("wireMSMatrix(): Inizializzazione controlli Mid/Side...", "INFO");
+
+    // --- CANALE MID ---
+    wireGain({
+        paramId: 'mid_gain',
+        sliderId: 'midGainSlider', // Assicurati che l'ID nell'HTML sia un input range
+        labelId: 'midGainValue',   // L'elemento span/div affiancato per il testo dei dB
+        minDb: MID_GAIN_MIN_DB,
+        maxDb: MID_GAIN_MAX_DB,
+        stepDb: MID_GAIN_STEP_DB,
+        defaultDb: MID_GAIN_DEFAULT_DB
+    });
+
+    wireToggleParameter({
+        paramId: 'mid_mute',
+        buttonId: 'midMuteBtn',
+        activeClass: 'muted'
+    });
+
+    // --- CANALE SIDE ---
+    wireGain({
+        paramId: 'side_gain',
+        sliderId: 'sideGainSlider',
+        labelId: 'sideGainValue',
+    	minDb: SIDE_GAIN_MIN_DB,
+        maxDb: SIDE_GAIN_MAX_DB,
+        stepDb: SIDE_GAIN_STEP_DB,
+        defaultDb: SIDE_GAIN_DEFAULT_DB
+    });
+
+    wireToggleParameter({
+        paramId: 'side_mute',
+        buttonId: 'sideMuteBtn',
+        activeClass: 'muted'
+    });
 }
 
 function wireMeters() {
@@ -654,8 +790,17 @@ function init() {
     }
 
     debugLog('✓ __JUCE__ available, initializing...', 'SUCCESS');
-    wireGain();
+    wireGain({
+        paramId: 'gain',
+        sliderId: 'gainSlider',
+        labelId: 'gainValue',
+        minDb: GAIN_MIN_DB,
+        maxDb: GAIN_MAX_DB,
+        stepDb: GAIN_STEP_DB,
+        defaultDb: GAIN_DEFAULT_DB
+    });
     wirePhaseControls();
+    wireMSMatrix();
     wireMeters();
     debugLog('=== Init Complete ===', 'SUCCESS');
 }
@@ -672,8 +817,17 @@ async function initAsync() {
     }
 
     debugLog('✓ Starting component initialization...', 'SUCCESS');
-    wireGain();
+    wireGain({
+        paramId: 'gain',
+        sliderId: 'gainSlider',
+        labelId: 'gainValue',
+        minDb: GAIN_MIN_DB,
+        maxDb: GAIN_MAX_DB,
+        stepDb: GAIN_STEP_DB,
+        defaultDb: GAIN_DEFAULT_DB
+    });
     wirePhaseControls();
+    wireMSMatrix();
     wireMeters();
     debugLog('=== Init Complete ===', 'SUCCESS');
 }

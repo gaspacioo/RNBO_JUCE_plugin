@@ -8,6 +8,21 @@
       "gain": {
         "value": 0
       },
+      "mid_gain": {
+        "value": -8
+      },
+      "mid_mute": {
+        "value": 0
+      },
+      "phase_inv": {
+        "value": 0
+      },
+      "side_gain": {
+        "value": 0
+      },
+      "side_mute": {
+        "value": 1
+      },
       "temperature": {
         "value": 20
       }

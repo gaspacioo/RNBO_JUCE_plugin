@@ -3,6 +3,49 @@
     {
       "type": "ParameterTypeNumber",
       "index": 0,
+      "name": "mid_gain",
+      "paramId": "mid_gain",
+      "minimum": -60,
+      "maximum": 12,
+      "exponent": 1,
+      "steps": 0,
+      "initialValue": 0,
+      "isEnum": false,
+      "enumValues": [],
+      "displayName": "",
+      "unit": "",
+      "order": 0,
+      "debug": false,
+      "visible": true,
+      "signalIndex": null,
+      "ioType": "IOTypeUndefined"
+    },
+    {
+      "type": "ParameterTypeNumber",
+      "index": 1,
+      "name": "mid_mute",
+      "paramId": "mid_mute",
+      "minimum": 0,
+      "maximum": 1,
+      "exponent": 1,
+      "steps": 2,
+      "initialValue": 0,
+      "isEnum": true,
+      "enumValues": [
+        0,
+        1
+      ],
+      "displayName": "",
+      "unit": "",
+      "order": 0,
+      "debug": false,
+      "visible": true,
+      "signalIndex": null,
+      "ioType": "IOTypeUndefined"
+    },
+    {
+      "type": "ParameterTypeNumber",
+      "index": 2,
       "name": "gain",
       "paramId": "gain",
       "minimum": -60,
@@ -22,7 +65,50 @@
     },
     {
       "type": "ParameterTypeNumber",
-      "index": 1,
+      "index": 3,
+      "name": "side_gain",
+      "paramId": "side_gain",
+      "minimum": -60,
+      "maximum": 12,
+      "exponent": 1,
+      "steps": 0,
+      "initialValue": 0,
+      "isEnum": false,
+      "enumValues": [],
+      "displayName": "",
+      "unit": "",
+      "order": 0,
+      "debug": false,
+      "visible": true,
+      "signalIndex": null,
+      "ioType": "IOTypeUndefined"
+    },
+    {
+      "type": "ParameterTypeNumber",
+      "index": 4,
+      "name": "phase_inv",
+      "paramId": "phase_inv",
+      "minimum": 0,
+      "maximum": 1,
+      "exponent": 1,
+      "steps": 2,
+      "initialValue": 0,
+      "isEnum": true,
+      "enumValues": [
+        0,
+        1
+      ],
+      "displayName": "",
+      "unit": "",
+      "order": 0,
+      "debug": false,
+      "visible": true,
+      "signalIndex": null,
+      "ioType": "IOTypeUndefined"
+    },
+    {
+      "type": "ParameterTypeNumber",
+      "index": 5,
       "name": "distance",
       "paramId": "distance",
       "minimum": 0,
@@ -42,7 +128,30 @@
     },
     {
       "type": "ParameterTypeNumber",
-      "index": 2,
+      "index": 6,
+      "name": "side_mute",
+      "paramId": "side_mute",
+      "minimum": 0,
+      "maximum": 1,
+      "exponent": 1,
+      "steps": 2,
+      "initialValue": 0,
+      "isEnum": true,
+      "enumValues": [
+        0,
+        1
+      ],
+      "displayName": "",
+      "unit": "",
+      "order": 0,
+      "debug": false,
+      "visible": true,
+      "signalIndex": null,
+      "ioType": "IOTypeUndefined"
+    },
+    {
+      "type": "ParameterTypeNumber",
+      "index": 7,
       "name": "temperature",
       "paramId": "temperature",
       "minimum": -10,
@@ -61,7 +170,7 @@
       "ioType": "IOTypeUndefined"
     }
   ],
-  "numParameters": 3,
+  "numParameters": 8,
   "numSignalInParameters": 0,
   "numSignalOutParameters": 0,
   "numInputChannels": 2,
@@ -86,11 +195,11 @@
       "meta": ""
     },
     {
-      "tag": "delay_time",
+      "tag": "out_rms_R",
       "meta": ""
     },
     {
-      "tag": "out_rms_R",
+      "tag": "delay_time",
       "meta": ""
     }
   ],

@@ -38,13 +38,33 @@
         </div>
       </div>
 
-      <div class="volume">
-        <span class="volume-label">Volume</span>
-        <div class="fader-track">
-          <input type="range" id="gainSlider" min="0" max="1" step="0.001" aria-label="Volume">
+    <div class="volume-section">
+        <div class="volume">
+          <button id="midMuteBtn" class="mute-toggle" aria-label="Mute Mid">Mid</button>
+          <div class="fader-track">
+            <input type="range" id="midGainSlider" min="-60" max="12" step="0.1" aria-label="Mid Volume">
+          </div>
+          <span id="midGainValue">0.0 dB</span>
         </div>
-        <span id="gainValue">0.0 dB</span>
-      </div>
+
+        <div class="volume">
+          <button id="sideMuteBtn" class="mute-toggle" aria-label="Mute Side">Side</button>
+          <div class="fader-track">
+            <input type="range" id="sideGainSlider" min="-60" max="12" step="0.1" aria-label="Side Volume">
+          </div>
+          <span id="sideGainValue">0.0 dB</span>
+        </div>
+
+        <div class="volume volume-spacer">
+          <span class="volume-label">Volume</span>
+          <div class="fader-track">
+            <input type="range" id="gainSlider" min="-60" max="12" step="0.1" aria-label="Volume">
+          </div>
+          <span id="gainValue">0.0 dB</span>
+        </div>
+
+        <button id="phaseToggleBtn" class="phase-toggle-small" aria-label="Toggle phase inversion" aria-pressed="false" title="Phase Inversion">φ</button>
+    </div>
 
       <div class="meter">
         <div class="meter-head">
@@ -91,13 +111,11 @@
           </span>
         </label>
       </div>
-    </div>
-
-    <div class="delay-info">
-      <span class="delay-label">Delay:</span>
-      <span id="delayTimeValue" class="delay-value">0.0 ms</span>
-    </div>
-    
+        <div class="delay-info">
+          <span class="delay-label">Delay:</span>
+          <span id="delayTimeValue" class="delay-value">0.0 ms</span>
+      </div>
+    </div>    
   </div>
 
   <div id="aboutModal" class="modal">

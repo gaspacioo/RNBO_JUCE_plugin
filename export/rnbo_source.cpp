@@ -90,8 +90,10 @@ rnbomatic* getTopLevelPatcher() {
 void cancelClockEvents()
 {
     getEngine()->flushClockEvents(this, 770648402, false);
+    getEngine()->flushClockEvents(this, 1220262738, false);
     getEngine()->flushClockEvents(this, -368915887, false);
     getEngine()->flushClockEvents(this, -1508480176, false);
+    getEngine()->flushClockEvents(this, 848255507, false);
     getEngine()->flushClockEvents(this, 1646922831, false);
     getEngine()->flushClockEvents(this, -281953904, false);
 }
@@ -133,6 +135,10 @@ template <typename T> void listswapelements(T& arr, Int a, Int b) {
 
 inline number safesqrt(number num) {
     return (num > 0.0 ? rnbo_sqrt(num) : 0.0);
+}
+
+MillisecondTime currenttime() {
+    return this->_currentTime;
 }
 
 inline number linearinterp(number frac, number x, number y) {
@@ -261,51 +267,63 @@ void process(
     const SampleValue * in2 = (numInputs >= 2 && inputs[1] ? inputs[1] : this->zeroBuffer);
     this->delaytilde_01_perform(this->delaytilde_01_delay, in1, this->signals[0], n);
     this->selector_01_perform(this->selector_01_onoff, in1, this->signals[0], this->signals[1], n);
+    this->dspexpr_07_perform(this->signals[1], this->dspexpr_07_in2, this->signals[0], n);
 
     this->average_rms_tilde_01_perform(
         in1,
         this->average_rms_tilde_01_windowSize,
         this->average_rms_tilde_01_reset,
-        this->signals[0],
+        this->signals[1],
         n
     );
 
-    this->snapshot_01_perform(this->signals[0], n);
-    this->delaytilde_02_perform(this->delaytilde_02_delay, in2, this->signals[0], n);
-    this->selector_02_perform(this->selector_02_onoff, in2, this->signals[0], this->signals[2], n);
+    this->snapshot_01_perform(this->signals[1], n);
+    this->delaytilde_02_perform(this->delaytilde_02_delay, in2, this->signals[1], n);
+    this->selector_02_perform(this->selector_02_onoff, in2, this->signals[1], this->signals[2], n);
+    this->dspexpr_10_perform(this->signals[2], this->dspexpr_10_in2, this->signals[1], n);
+    this->dspexpr_09_perform(this->signals[0], this->signals[1], this->signals[2], n);
+    this->dspexpr_13_perform(this->signals[2], this->dspexpr_13_in2, this->signals[3], n);
+    this->dspexpr_12_perform(this->signals[3], this->dspexpr_12_in2, this->signals[2], n);
+    this->dspexpr_06_perform(this->signals[0], this->signals[1], this->signals[3], n);
+    this->dspexpr_04_perform(this->signals[3], this->dspexpr_04_in2, this->signals[1], n);
+    this->dspexpr_03_perform(this->signals[1], this->dspexpr_03_in2, this->signals[3], n);
+    this->dspexpr_11_perform(this->signals[3], this->signals[2], this->signals[1], n);
+    this->dspexpr_14_perform(this->signals[1], this->dspexpr_14_in2, this->signals[0], n);
+    this->dspexpr_02_perform(this->signals[3], this->signals[2], this->signals[1], n);
+    this->dspexpr_01_perform(this->signals[1], this->dspexpr_01_in2, this->signals[2], n);
 
     this->average_rms_tilde_02_perform(
         in2,
         this->average_rms_tilde_02_windowSize,
         this->average_rms_tilde_02_reset,
-        this->signals[0],
+        this->signals[1],
         n
     );
 
-    this->snapshot_02_perform(this->signals[0], n);
-    this->linetilde_01_perform(this->signals[0], n);
-    this->dspexpr_02_perform(this->signals[2], this->signals[0], out2, n);
+    this->snapshot_02_perform(this->signals[1], n);
+    this->linetilde_01_perform(this->signals[1], n);
+    this->dspexpr_08_perform(this->signals[0], this->signals[1], out2, n);
 
     this->average_rms_tilde_04_perform(
         out2,
         this->average_rms_tilde_04_windowSize,
         this->average_rms_tilde_04_reset,
-        this->signals[2],
+        this->signals[0],
         n
     );
 
-    this->snapshot_04_perform(this->signals[2], n);
-    this->dspexpr_01_perform(this->signals[1], this->signals[0], out1, n);
+    this->snapshot_04_perform(this->signals[0], n);
+    this->dspexpr_05_perform(this->signals[2], this->signals[1], out1, n);
 
     this->average_rms_tilde_03_perform(
         out1,
         this->average_rms_tilde_03_windowSize,
         this->average_rms_tilde_03_reset,
-        this->signals[0],
+        this->signals[1],
         n
     );
 
-    this->snapshot_03_perform(this->signals[0], n);
+    this->snapshot_03_perform(this->signals[1], n);
     this->stackprotect_perform(n);
     this->globaltransport_advance();
     this->audioProcessSampleCount += this->vs;
@@ -315,7 +333,7 @@ void prepareToProcess(number sampleRate, Index maxBlockSize, bool force) {
     if (this->maxvs < maxBlockSize || !this->didAllocateSignals) {
         Index i;
 
-        for (i = 0; i < 3; i++) {
+        for (i = 0; i < 4; i++) {
             this->signals[i] = resizeSignal(this->signals[i], this->maxvs, maxBlockSize);
         }
 
@@ -489,16 +507,26 @@ void setState() {}
 
 void getPreset(PatcherStateInterface& preset) {
     preset["__presetid"] = "rnbo";
-    this->param_01_getPresetValue(getSubState(preset, "gain"));
-    this->param_02_getPresetValue(getSubState(preset, "distance"));
-    this->param_03_getPresetValue(getSubState(preset, "temperature"));
+    this->param_01_getPresetValue(getSubState(preset, "mid_gain"));
+    this->param_02_getPresetValue(getSubState(preset, "mid_mute"));
+    this->param_03_getPresetValue(getSubState(preset, "gain"));
+    this->param_04_getPresetValue(getSubState(preset, "side_gain"));
+    this->param_05_getPresetValue(getSubState(preset, "phase_inv"));
+    this->param_06_getPresetValue(getSubState(preset, "distance"));
+    this->param_07_getPresetValue(getSubState(preset, "side_mute"));
+    this->param_08_getPresetValue(getSubState(preset, "temperature"));
 }
 
 void setPreset(MillisecondTime time, PatcherStateInterface& preset) {
     this->updateTime(time);
-    this->param_01_setPresetValue(getSubState(preset, "gain"));
-    this->param_02_setPresetValue(getSubState(preset, "distance"));
-    this->param_03_setPresetValue(getSubState(preset, "temperature"));
+    this->param_01_setPresetValue(getSubState(preset, "mid_gain"));
+    this->param_02_setPresetValue(getSubState(preset, "mid_mute"));
+    this->param_03_setPresetValue(getSubState(preset, "gain"));
+    this->param_04_setPresetValue(getSubState(preset, "side_gain"));
+    this->param_05_setPresetValue(getSubState(preset, "phase_inv"));
+    this->param_06_setPresetValue(getSubState(preset, "distance"));
+    this->param_07_setPresetValue(getSubState(preset, "side_mute"));
+    this->param_08_setPresetValue(getSubState(preset, "temperature"));
 }
 
 void setParameterValue(ParameterIndex index, ParameterValue v, MillisecondTime time) {
@@ -518,6 +546,31 @@ void setParameterValue(ParameterIndex index, ParameterValue v, MillisecondTime t
     case 2:
         {
         this->param_03_value_set(v);
+        break;
+        }
+    case 3:
+        {
+        this->param_04_value_set(v);
+        break;
+        }
+    case 4:
+        {
+        this->param_05_value_set(v);
+        break;
+        }
+    case 5:
+        {
+        this->param_06_value_set(v);
+        break;
+        }
+    case 6:
+        {
+        this->param_07_value_set(v);
+        break;
+        }
+    case 7:
+        {
+        this->param_08_value_set(v);
         break;
         }
     }
@@ -549,6 +602,26 @@ ParameterValue getParameterValue(ParameterIndex index)  {
         {
         return this->param_03_value;
         }
+    case 3:
+        {
+        return this->param_04_value;
+        }
+    case 4:
+        {
+        return this->param_05_value;
+        }
+    case 5:
+        {
+        return this->param_06_value;
+        }
+    case 6:
+        {
+        return this->param_07_value;
+        }
+    case 7:
+        {
+        return this->param_08_value;
+        }
     default:
         {
         return 0;
@@ -565,20 +638,40 @@ ParameterIndex getNumSignalOutParameters() const {
 }
 
 ParameterIndex getNumParameters() const {
-    return 3;
+    return 8;
 }
 
 ConstCharPointer getParameterName(ParameterIndex index) const {
     switch (index) {
     case 0:
         {
-        return "gain";
+        return "mid_gain";
         }
     case 1:
         {
-        return "distance";
+        return "mid_mute";
         }
     case 2:
+        {
+        return "gain";
+        }
+    case 3:
+        {
+        return "side_gain";
+        }
+    case 4:
+        {
+        return "phase_inv";
+        }
+    case 5:
+        {
+        return "distance";
+        }
+    case 6:
+        {
+        return "side_mute";
+        }
+    case 7:
         {
         return "temperature";
         }
@@ -593,13 +686,33 @@ ConstCharPointer getParameterId(ParameterIndex index) const {
     switch (index) {
     case 0:
         {
-        return "gain";
+        return "mid_gain";
         }
     case 1:
         {
-        return "distance";
+        return "mid_mute";
         }
     case 2:
+        {
+        return "gain";
+        }
+    case 3:
+        {
+        return "side_gain";
+        }
+    case 4:
+        {
+        return "phase_inv";
+        }
+    case 5:
+        {
+        return "distance";
+        }
+    case 6:
+        {
+        return "side_mute";
+        }
+    case 7:
         {
         return "temperature";
         }
@@ -637,6 +750,86 @@ void getParameterInfo(ParameterIndex index, ParameterInfo * info) const {
             info->type = ParameterTypeNumber;
             info->initialValue = 0;
             info->min = 0;
+            info->max = 1;
+            info->exponent = 1;
+            info->steps = 2;
+            static const char * eVal1[] = {"0", "1"};
+            info->enumValues = eVal1;
+            info->debug = false;
+            info->saveable = true;
+            info->transmittable = true;
+            info->initialized = true;
+            info->visible = true;
+            info->displayName = "";
+            info->unit = "";
+            info->ioType = IOTypeUndefined;
+            info->signalIndex = INVALID_INDEX;
+            break;
+            }
+        case 2:
+            {
+            info->type = ParameterTypeNumber;
+            info->initialValue = 0;
+            info->min = -60;
+            info->max = 12;
+            info->exponent = 1;
+            info->steps = 0;
+            info->debug = false;
+            info->saveable = true;
+            info->transmittable = true;
+            info->initialized = true;
+            info->visible = true;
+            info->displayName = "";
+            info->unit = "";
+            info->ioType = IOTypeUndefined;
+            info->signalIndex = INVALID_INDEX;
+            break;
+            }
+        case 3:
+            {
+            info->type = ParameterTypeNumber;
+            info->initialValue = 0;
+            info->min = -60;
+            info->max = 12;
+            info->exponent = 1;
+            info->steps = 0;
+            info->debug = false;
+            info->saveable = true;
+            info->transmittable = true;
+            info->initialized = true;
+            info->visible = true;
+            info->displayName = "";
+            info->unit = "";
+            info->ioType = IOTypeUndefined;
+            info->signalIndex = INVALID_INDEX;
+            break;
+            }
+        case 4:
+            {
+            info->type = ParameterTypeNumber;
+            info->initialValue = 0;
+            info->min = 0;
+            info->max = 1;
+            info->exponent = 1;
+            info->steps = 2;
+            static const char * eVal4[] = {"0", "1"};
+            info->enumValues = eVal4;
+            info->debug = false;
+            info->saveable = true;
+            info->transmittable = true;
+            info->initialized = true;
+            info->visible = true;
+            info->displayName = "";
+            info->unit = "";
+            info->ioType = IOTypeUndefined;
+            info->signalIndex = INVALID_INDEX;
+            break;
+            }
+        case 5:
+            {
+            info->type = ParameterTypeNumber;
+            info->initialValue = 0;
+            info->min = 0;
             info->max = 60;
             info->exponent = 1;
             info->steps = 0;
@@ -651,7 +844,28 @@ void getParameterInfo(ParameterIndex index, ParameterInfo * info) const {
             info->signalIndex = INVALID_INDEX;
             break;
             }
-        case 2:
+        case 6:
+            {
+            info->type = ParameterTypeNumber;
+            info->initialValue = 0;
+            info->min = 0;
+            info->max = 1;
+            info->exponent = 1;
+            info->steps = 2;
+            static const char * eVal6[] = {"0", "1"};
+            info->enumValues = eVal6;
+            info->debug = false;
+            info->saveable = true;
+            info->transmittable = true;
+            info->initialized = true;
+            info->visible = true;
+            info->displayName = "";
+            info->unit = "";
+            info->ioType = IOTypeUndefined;
+            info->signalIndex = INVALID_INDEX;
+            break;
+            }
+        case 7:
             {
             info->type = ParameterTypeNumber;
             info->initialValue = 20;
@@ -695,6 +909,21 @@ ParameterValue applyStepsToNormalizedParameterValue(ParameterValue normalizedVal
 ParameterValue convertToNormalizedParameterValue(ParameterIndex index, ParameterValue value) const {
     switch (index) {
     case 1:
+    case 4:
+    case 6:
+        {
+        {
+            value = (value < 0 ? 0 : (value > 1 ? 1 : value));
+            ParameterValue normalizedValue = (value - 0) / (1 - 0);
+
+            {
+                normalizedValue = this->applyStepsToNormalizedParameterValue(normalizedValue, 2);
+            }
+
+            return normalizedValue;
+        }
+        }
+    case 5:
         {
         {
             value = (value < 0 ? 0 : (value > 60 ? 60 : value));
@@ -703,6 +932,8 @@ ParameterValue convertToNormalizedParameterValue(ParameterIndex index, Parameter
         }
         }
     case 0:
+    case 2:
+    case 3:
         {
         {
             value = (value < -60 ? -60 : (value > 12 ? 12 : value));
@@ -710,7 +941,7 @@ ParameterValue convertToNormalizedParameterValue(ParameterIndex index, Parameter
             return normalizedValue;
         }
         }
-    case 2:
+    case 7:
         {
         {
             value = (value < -10 ? -10 : (value > 40 ? 40 : value));
@@ -730,6 +961,20 @@ ParameterValue convertFromNormalizedParameterValue(ParameterIndex index, Paramet
 
     switch (index) {
     case 1:
+    case 4:
+    case 6:
+        {
+        {
+            {
+                value = this->applyStepsToNormalizedParameterValue(value, 2);
+            }
+
+            {
+                return 0 + value * (1 - 0);
+            }
+        }
+        }
+    case 5:
         {
         {
             {
@@ -738,6 +983,8 @@ ParameterValue convertFromNormalizedParameterValue(ParameterIndex index, Paramet
         }
         }
     case 0:
+    case 2:
+    case 3:
         {
         {
             {
@@ -745,7 +992,7 @@ ParameterValue convertFromNormalizedParameterValue(ParameterIndex index, Paramet
             }
         }
         }
-    case 2:
+    case 7:
         {
         {
             {
@@ -773,6 +1020,26 @@ ParameterValue constrainParameterValue(ParameterIndex index, ParameterValue valu
     case 2:
         {
         return this->param_03_value_constrain(value);
+        }
+    case 3:
+        {
+        return this->param_04_value_constrain(value);
+        }
+    case 4:
+        {
+        return this->param_05_value_constrain(value);
+        }
+    case 5:
+        {
+        return this->param_06_value_constrain(value);
+        }
+    case 6:
+        {
+        return this->param_07_value_constrain(value);
+        }
+    case 7:
+        {
+        return this->param_08_value_constrain(value);
         }
     default:
         {
@@ -810,6 +1077,11 @@ void processClockEvent(MillisecondTime time, ClockId index, bool hasValue, Param
         this->snapshot_01_out_set(value);
         break;
         }
+    case 1220262738:
+        {
+        this->line_01_tick_set(value);
+        break;
+        }
     case -368915887:
         {
         this->snapshot_02_out_set(value);
@@ -818,6 +1090,11 @@ void processClockEvent(MillisecondTime time, ClockId index, bool hasValue, Param
     case -1508480176:
         {
         this->snapshot_03_out_set(value);
+        break;
+        }
+    case 848255507:
+        {
+        this->line_02_tick_set(value);
         break;
         }
     case 1646922831:
@@ -869,13 +1146,13 @@ MessageTagInfo resolveTag(MessageTag tag) const {
         {
         return "out_rms_L";
         }
-    case TAG("delay_time"):
-        {
-        return "delay_time";
-        }
     case TAG("out_rms_R"):
         {
         return "out_rms_R";
+        }
+    case TAG("delay_time"):
+        {
+        return "delay_time";
         }
     }
 
@@ -918,7 +1195,7 @@ const MessageInfo& getMessageInfo(MessageIndex index) const {
     case 3:
         {
         static const MessageInfo r3 = {
-            "delay_time",
+            "out_rms_R",
             Outport
         };
 
@@ -927,7 +1204,7 @@ const MessageInfo& getMessageInfo(MessageIndex index) const {
     case 4:
         {
         static const MessageInfo r4 = {
-            "out_rms_R",
+            "delay_time",
             Outport
         };
 
@@ -950,7 +1227,7 @@ void param_01_value_set(number v) {
         this->param_01_lastValue = this->param_01_value;
     }
 
-    this->expr_04_in1_set(v);
+    this->expr_02_in1_set(v);
 }
 
 void param_02_value_set(number v) {
@@ -963,8 +1240,7 @@ void param_02_value_set(number v) {
         this->param_02_lastValue = this->param_02_value;
     }
 
-    this->expr_06_$in1_set(v);
-    this->expr_05_$in1_set(v);
+    this->trigger_01_input_number_set(v);
 }
 
 void param_03_value_set(number v) {
@@ -977,7 +1253,73 @@ void param_03_value_set(number v) {
         this->param_03_lastValue = this->param_03_value;
     }
 
-    this->trigger_01_input_number_set(v);
+    this->expr_08_in1_set(v);
+}
+
+void param_04_value_set(number v) {
+    v = this->param_04_value_constrain(v);
+    this->param_04_value = v;
+    this->sendParameter(3, false);
+
+    if (this->param_04_value != this->param_04_lastValue) {
+        this->getEngine()->presetTouched();
+        this->param_04_lastValue = this->param_04_value;
+    }
+
+    this->expr_09_in1_set(v);
+}
+
+void param_05_value_set(number v) {
+    v = this->param_05_value_constrain(v);
+    this->param_05_value = v;
+    this->sendParameter(4, false);
+
+    if (this->param_05_value != this->param_05_lastValue) {
+        this->getEngine()->presetTouched();
+        this->param_05_lastValue = this->param_05_value;
+    }
+
+    this->expr_11_$in1_set(v);
+}
+
+void param_06_value_set(number v) {
+    v = this->param_06_value_constrain(v);
+    this->param_06_value = v;
+    this->sendParameter(5, false);
+
+    if (this->param_06_value != this->param_06_lastValue) {
+        this->getEngine()->presetTouched();
+        this->param_06_lastValue = this->param_06_value;
+    }
+
+    this->expr_13_$in1_set(v);
+    this->expr_12_$in1_set(v);
+}
+
+void param_07_value_set(number v) {
+    v = this->param_07_value_constrain(v);
+    this->param_07_value = v;
+    this->sendParameter(6, false);
+
+    if (this->param_07_value != this->param_07_lastValue) {
+        this->getEngine()->presetTouched();
+        this->param_07_lastValue = this->param_07_value;
+    }
+
+    this->trigger_02_input_number_set(v);
+}
+
+void param_08_value_set(number v) {
+    v = this->param_08_value_constrain(v);
+    this->param_08_value = v;
+    this->sendParameter(7, false);
+
+    if (this->param_08_value != this->param_08_lastValue) {
+        this->getEngine()->presetTouched();
+        this->param_08_lastValue = this->param_08_value;
+    }
+
+    this->trigger_03_input_number_set(v);
 }
 
 void snapshot_01_out_set(number v) {
@@ -985,19 +1327,43 @@ void snapshot_01_out_set(number v) {
     this->expr_01_in1_set(v);
 }
 
+void line_01_tick_set(number v) {
+    this->line_01_output_set(v);
+
+    if ((bool)(this->line_01_isFinished(v))) {
+        this->line_01_slope = 0;
+        this->line_01_startValue = v;
+        this->line_01_startPendingRamp();
+    } else {
+        this->line_01_scheduleNext();
+    }
+}
+
 void snapshot_02_out_set(number v) {
     this->snapshot_02_out = v;
-    this->expr_02_in1_set(v);
+    this->expr_03_in1_set(v);
 }
 
 void snapshot_03_out_set(number v) {
     this->snapshot_03_out = v;
-    this->expr_03_in1_set(v);
+    this->expr_06_in1_set(v);
+}
+
+void line_02_tick_set(number v) {
+    this->line_02_output_set(v);
+
+    if ((bool)(this->line_02_isFinished(v))) {
+        this->line_02_slope = 0;
+        this->line_02_startValue = v;
+        this->line_02_startPendingRamp();
+    } else {
+        this->line_02_scheduleNext();
+    }
 }
 
 void snapshot_04_out_set(number v) {
     this->snapshot_04_out = v;
-    this->expr_07_in1_set(v);
+    this->expr_10_in1_set(v);
 }
 
 void linetilde_01_target_bang() {}
@@ -1114,10 +1480,191 @@ void startup() {
         this->scheduleParamInit(2, 0);
     }
 
+    {
+        this->scheduleParamInit(3, 0);
+    }
+
+    {
+        this->scheduleParamInit(4, 0);
+    }
+
+    {
+        this->scheduleParamInit(5, 0);
+    }
+
+    {
+        this->scheduleParamInit(6, 0);
+    }
+
+    {
+        this->scheduleParamInit(7, 0);
+    }
+
     this->processParamInitEvents();
 }
 
 number param_01_value_constrain(number v) const {
+    v = (v > 12 ? 12 : (v < -60 ? -60 : v));
+    return v;
+}
+
+number line_01_time_constrain(number v) const {
+    if (v < 0)
+        v = 0;
+
+    return v;
+}
+
+void line_01_time_set(number v) {
+    v = this->line_01_time_constrain(v);
+    this->line_01_time = v;
+}
+
+void dspexpr_03_in2_set(number v) {
+    this->dspexpr_03_in2 = v;
+}
+
+void expr_05_out1_set(number v) {
+    this->expr_05_out1 = v;
+    this->dspexpr_03_in2_set(this->expr_05_out1);
+}
+
+void expr_05_in1_set(number in1) {
+    this->expr_05_in1 = in1;
+    this->expr_05_out1_set(this->expr_05_in1 * this->expr_05_in2);//#map:*_obj-54:1
+}
+
+void line_01_output_set(number v) {
+    this->line_01_output = v;
+    this->expr_05_in1_set(v);
+}
+
+void line_01_stop_bang() {
+    this->getEngine()->flushClockEvents(this, 1220262738, false);;
+    this->line_01_pendingRamps->length = 0;
+    this->line_01_startValue = this->line_01_output;
+    this->line_01_slope = 0;
+    this->line_01__time = 0;
+    this->line_01_time_set(0);
+}
+
+number line_01_grain_constrain(number v) const {
+    if (v < 0)
+        v = 0;
+
+    return v;
+}
+
+void line_01_grain_set(number v) {
+    v = this->line_01_grain_constrain(v);
+    this->line_01_grain = v;
+
+    if ((bool)(!(bool)(this->line_01_isFinished(this->line_01_startValue)))) {
+        this->getEngine()->flushClockEvents(this, 1220262738, false);;
+        this->line_01_scheduleNext();
+    }
+}
+
+void line_01_end_bang() {}
+
+void line_01_target_set(const list& v) {
+    this->line_01_target = jsCreateListCopy(v);
+    this->line_01_pendingRamps->length = 0;
+
+    if (v->length == 1) {
+        this->line_01__time = this->line_01_time;
+        this->line_01_time_set(0);
+
+        if ((bool)(this->line_01__time)) {
+            this->line_01_startRamp(v[0], this->line_01__time);
+        } else {
+            this->line_01_output_set(v[0]);
+            this->line_01_startValue = v[0];
+            this->line_01_stop_bang();
+        }
+    } else if (v->length == 2) {
+        this->line_01_time_set(0);
+        this->line_01__time = (v[1] < 0 ? 0 : v[1]);
+        this->line_01_startRamp(v[0], this->line_01__time);
+    } else if (v->length == 3) {
+        this->line_01_time_set(0);
+        this->line_01_grain_set(v[2]);
+        this->line_01__time = (v[1] < 0 ? 0 : v[1]);
+        this->line_01_startRamp(v[0], this->line_01__time);
+    } else {
+        this->line_01_time_set(0);
+        this->line_01_pendingRamps = jsCreateListCopy(v);
+        this->line_01_startPendingRamp();
+    }
+}
+
+void expr_02_out1_set(number v) {
+    this->expr_02_out1 = v;
+
+    {
+        list converted = {this->expr_02_out1};
+        this->line_01_target_set(converted);
+    }
+}
+
+void expr_02_in1_set(number in1) {
+    this->expr_02_in1 = in1;
+    this->expr_02_out1_set(rnbo_pow(10, this->expr_02_in1 * 0.05));//#map:dbtoa_obj-42:1
+}
+
+number param_02_value_constrain(number v) const {
+    v = (v > 1 ? 1 : (v < 0 ? 0 : v));
+
+    {
+        number oneStep = (number)1 / (number)1;
+        number oneStepInv = (oneStep != 0 ? (number)1 / oneStep : 0);
+        number numberOfSteps = rnbo_fround(v * oneStepInv * 1 / (number)1) * 1;
+        v = numberOfSteps * oneStep;
+    }
+
+    return v;
+}
+
+void expr_05_in2_set(number v) {
+    this->expr_05_in2 = v;
+}
+
+void expr_04_out1_set(number v) {
+    this->expr_04_out1 = v;
+    this->expr_05_in2_set(this->expr_04_out1);
+}
+
+void expr_04_$in1_set(number $in1) {
+    this->expr_04_$in1 = $in1;
+    this->expr_04_out1_set(1 - this->expr_04_$in1);//#map:expr_obj-53:1
+}
+
+void trigger_01_out2_set(number v) {
+    this->expr_04_$in1_set(v);
+}
+
+void param_01_value_bang() {
+    number v = this->param_01_value;
+    this->sendParameter(0, false);
+
+    if (this->param_01_value != this->param_01_lastValue) {
+        this->getEngine()->presetTouched();
+        this->param_01_lastValue = this->param_01_value;
+    }
+
+    this->expr_02_in1_set(v);
+}
+
+void trigger_01_out1_bang() {
+    this->param_01_value_bang();
+}
+
+void trigger_01_input_number_set(number v) {
+    this->trigger_01_out2_set(v);
+    this->trigger_01_out1_bang();
+}
+
+number param_03_value_constrain(number v) const {
     v = (v > 12 ? 12 : (v < -60 ? -60 : v));
     return v;
 }
@@ -1192,26 +1739,167 @@ void linetilde_01_segments_set(const list& v) {
     }
 }
 
-void expr_04_out1_set(number v) {
-    this->expr_04_out1 = v;
+void expr_08_out1_set(number v) {
+    this->expr_08_out1 = v;
 
     {
-        list converted = {this->expr_04_out1};
+        list converted = {this->expr_08_out1};
         this->linetilde_01_segments_set(converted);
     }
 }
 
-void expr_04_in1_set(number in1) {
-    this->expr_04_in1 = in1;
-    this->expr_04_out1_set(rnbo_pow(10, this->expr_04_in1 * 0.05));//#map:dbtoa_obj-8:1
+void expr_08_in1_set(number in1) {
+    this->expr_08_in1 = in1;
+    this->expr_08_out1_set(rnbo_pow(10, this->expr_08_in1 * 0.05));//#map:dbtoa_obj-8:1
 }
 
-number param_02_value_constrain(number v) const {
+number param_04_value_constrain(number v) const {
+    v = (v > 12 ? 12 : (v < -60 ? -60 : v));
+    return v;
+}
+
+number line_02_time_constrain(number v) const {
+    if (v < 0)
+        v = 0;
+
+    return v;
+}
+
+void line_02_time_set(number v) {
+    v = this->line_02_time_constrain(v);
+    this->line_02_time = v;
+}
+
+void dspexpr_12_in2_set(number v) {
+    this->dspexpr_12_in2 = v;
+}
+
+void expr_07_out1_set(number v) {
+    this->expr_07_out1 = v;
+    this->dspexpr_12_in2_set(this->expr_07_out1);
+}
+
+void expr_07_in1_set(number in1) {
+    this->expr_07_in1 = in1;
+    this->expr_07_out1_set(this->expr_07_in1 * this->expr_07_in2);//#map:*_obj-56:1
+}
+
+void line_02_output_set(number v) {
+    this->line_02_output = v;
+    this->expr_07_in1_set(v);
+}
+
+void line_02_stop_bang() {
+    this->getEngine()->flushClockEvents(this, 848255507, false);;
+    this->line_02_pendingRamps->length = 0;
+    this->line_02_startValue = this->line_02_output;
+    this->line_02_slope = 0;
+    this->line_02__time = 0;
+    this->line_02_time_set(0);
+}
+
+number line_02_grain_constrain(number v) const {
+    if (v < 0)
+        v = 0;
+
+    return v;
+}
+
+void line_02_grain_set(number v) {
+    v = this->line_02_grain_constrain(v);
+    this->line_02_grain = v;
+
+    if ((bool)(!(bool)(this->line_02_isFinished(this->line_02_startValue)))) {
+        this->getEngine()->flushClockEvents(this, 848255507, false);;
+        this->line_02_scheduleNext();
+    }
+}
+
+void line_02_end_bang() {}
+
+void line_02_target_set(const list& v) {
+    this->line_02_target = jsCreateListCopy(v);
+    this->line_02_pendingRamps->length = 0;
+
+    if (v->length == 1) {
+        this->line_02__time = this->line_02_time;
+        this->line_02_time_set(0);
+
+        if ((bool)(this->line_02__time)) {
+            this->line_02_startRamp(v[0], this->line_02__time);
+        } else {
+            this->line_02_output_set(v[0]);
+            this->line_02_startValue = v[0];
+            this->line_02_stop_bang();
+        }
+    } else if (v->length == 2) {
+        this->line_02_time_set(0);
+        this->line_02__time = (v[1] < 0 ? 0 : v[1]);
+        this->line_02_startRamp(v[0], this->line_02__time);
+    } else if (v->length == 3) {
+        this->line_02_time_set(0);
+        this->line_02_grain_set(v[2]);
+        this->line_02__time = (v[1] < 0 ? 0 : v[1]);
+        this->line_02_startRamp(v[0], this->line_02__time);
+    } else {
+        this->line_02_time_set(0);
+        this->line_02_pendingRamps = jsCreateListCopy(v);
+        this->line_02_startPendingRamp();
+    }
+}
+
+void expr_09_out1_set(number v) {
+    this->expr_09_out1 = v;
+
+    {
+        list converted = {this->expr_09_out1};
+        this->line_02_target_set(converted);
+    }
+}
+
+void expr_09_in1_set(number in1) {
+    this->expr_09_in1 = in1;
+    this->expr_09_out1_set(rnbo_pow(10, this->expr_09_in1 * 0.05));//#map:dbtoa_obj-45:1
+}
+
+number param_05_value_constrain(number v) const {
+    v = (v > 1 ? 1 : (v < 0 ? 0 : v));
+
+    {
+        number oneStep = (number)1 / (number)1;
+        number oneStepInv = (oneStep != 0 ? (number)1 / oneStep : 0);
+        number numberOfSteps = rnbo_fround(v * oneStepInv * 1 / (number)1) * 1;
+        v = numberOfSteps * oneStep;
+    }
+
+    return v;
+}
+
+void dspexpr_10_in2_set(number v) {
+    this->dspexpr_10_in2 = v;
+}
+
+void dspexpr_07_in2_set(number v) {
+    this->dspexpr_07_in2 = v;
+}
+
+void expr_11_out1_set(number v) {
+    this->expr_11_out1 = v;
+    this->dspexpr_10_in2_set(this->expr_11_out1);
+    this->dspexpr_07_in2_set(this->expr_11_out1);
+}
+
+void expr_11_$in1_set(number $in1) {
+    this->expr_11_$in1 = $in1;
+    this->expr_11_out1_set(1 - 2 * this->expr_11_$in1);//#map:expr_obj-28:1
+}
+
+number param_06_value_constrain(number v) const {
     v = (v > 60 ? 60 : (v < 0 ? 0 : v));
     return v;
 }
 
-void outport_04_input_number_set(number v) {
+void outport_05_input_number_set(number v) {
     this->getEngine()->sendNumMessage(TAG("delay_time"), TAG(""), v, this->_currentTime);
 }
 
@@ -1237,17 +1925,17 @@ void mstosamps_01_ms_set(number ms) {
     }
 }
 
-void expr_06_out1_set(number v) {
-    this->expr_06_out1 = v;
-    this->outport_04_input_number_set(this->expr_06_out1);
-    this->mstosamps_01_ms_set(this->expr_06_out1);
+void expr_13_out1_set(number v) {
+    this->expr_13_out1 = v;
+    this->outport_05_input_number_set(this->expr_13_out1);
+    this->mstosamps_01_ms_set(this->expr_13_out1);
 }
 
-void expr_06_$in1_set(number $in1) {
-    this->expr_06_$in1 = $in1;
+void expr_13_$in1_set(number $in1) {
+    this->expr_13_$in1 = $in1;
 
-    this->expr_06_out1_set(
-        ((331.4 + 0.6 * this->expr_06_$in2 == 0. ? 0. : this->expr_06_$in1 / (331.4 + 0.6 * this->expr_06_$in2))) * 1000
+    this->expr_13_out1_set(
+        ((331.4 + 0.6 * this->expr_13_$in2 == 0. ? 0. : this->expr_13_$in1 / (331.4 + 0.6 * this->expr_13_$in2))) * 1000
     );//#map:expr_obj-24:1
 }
 
@@ -1259,50 +1947,102 @@ void selector_01_onoff_set(number v) {
     this->selector_01_onoff = v;
 }
 
-void expr_05_out1_set(number v) {
-    this->expr_05_out1 = v;
-    this->selector_02_onoff_set(this->expr_05_out1);
-    this->selector_01_onoff_set(this->expr_05_out1);
+void expr_12_out1_set(number v) {
+    this->expr_12_out1 = v;
+    this->selector_02_onoff_set(this->expr_12_out1);
+    this->selector_01_onoff_set(this->expr_12_out1);
 }
 
-void expr_05_$in1_set(number $in1) {
-    this->expr_05_$in1 = $in1;
-    this->expr_05_out1_set((this->expr_05_$in1 > 0) + 1);//#map:expr_obj-35:1
+void expr_12_$in1_set(number $in1) {
+    this->expr_12_$in1 = $in1;
+    this->expr_12_out1_set((this->expr_12_$in1 > 0) + 1);//#map:expr_obj-35:1
 }
 
-number param_03_value_constrain(number v) const {
+number param_07_value_constrain(number v) const {
+    v = (v > 1 ? 1 : (v < 0 ? 0 : v));
+
+    {
+        number oneStep = (number)1 / (number)1;
+        number oneStepInv = (oneStep != 0 ? (number)1 / oneStep : 0);
+        number numberOfSteps = rnbo_fround(v * oneStepInv * 1 / (number)1) * 1;
+        v = numberOfSteps * oneStep;
+    }
+
+    return v;
+}
+
+void expr_07_in2_set(number v) {
+    this->expr_07_in2 = v;
+}
+
+void expr_14_out1_set(number v) {
+    this->expr_14_out1 = v;
+    this->expr_07_in2_set(this->expr_14_out1);
+}
+
+void expr_14_$in1_set(number $in1) {
+    this->expr_14_$in1 = $in1;
+    this->expr_14_out1_set(1 - this->expr_14_$in1);//#map:expr_obj-55:1
+}
+
+void trigger_02_out2_set(number v) {
+    this->expr_14_$in1_set(v);
+}
+
+void param_04_value_bang() {
+    number v = this->param_04_value;
+    this->sendParameter(3, false);
+
+    if (this->param_04_value != this->param_04_lastValue) {
+        this->getEngine()->presetTouched();
+        this->param_04_lastValue = this->param_04_value;
+    }
+
+    this->expr_09_in1_set(v);
+}
+
+void trigger_02_out1_bang() {
+    this->param_04_value_bang();
+}
+
+void trigger_02_input_number_set(number v) {
+    this->trigger_02_out2_set(v);
+    this->trigger_02_out1_bang();
+}
+
+number param_08_value_constrain(number v) const {
     v = (v > 40 ? 40 : (v < -10 ? -10 : v));
     return v;
 }
 
-void expr_06_$in2_set(number v) {
-    this->expr_06_$in2 = v;
+void expr_13_$in2_set(number v) {
+    this->expr_13_$in2 = v;
 }
 
-void trigger_01_out2_set(number v) {
-    this->expr_06_$in2_set(v);
+void trigger_03_out2_set(number v) {
+    this->expr_13_$in2_set(v);
 }
 
-void param_02_value_bang() {
-    number v = this->param_02_value;
-    this->sendParameter(1, false);
+void param_06_value_bang() {
+    number v = this->param_06_value;
+    this->sendParameter(5, false);
 
-    if (this->param_02_value != this->param_02_lastValue) {
+    if (this->param_06_value != this->param_06_lastValue) {
         this->getEngine()->presetTouched();
-        this->param_02_lastValue = this->param_02_value;
+        this->param_06_lastValue = this->param_06_value;
     }
 
-    this->expr_06_$in1_set(v);
-    this->expr_05_$in1_set(v);
+    this->expr_13_$in1_set(v);
+    this->expr_12_$in1_set(v);
 }
 
-void trigger_01_out1_bang() {
-    this->param_02_value_bang();
+void trigger_03_out1_bang() {
+    this->param_06_value_bang();
 }
 
-void trigger_01_input_number_set(number v) {
-    this->trigger_01_out2_set(v);
-    this->trigger_01_out1_bang();
+void trigger_03_input_number_set(number v) {
+    this->trigger_03_out2_set(v);
+    this->trigger_03_out1_bang();
 }
 
 void outport_01_input_number_set(number v) {
@@ -1326,26 +2066,9 @@ void outport_02_input_number_set(number v) {
     this->getEngine()->sendNumMessage(TAG("in_rms_R"), TAG(""), v, this->_currentTime);
 }
 
-void expr_02_out1_set(number v) {
-    this->expr_02_out1 = v;
-    this->outport_02_input_number_set(this->expr_02_out1);
-}
-
-void expr_02_in1_set(number in1) {
-    this->expr_02_in1 = in1;
-
-    this->expr_02_out1_set(
-        (this->expr_02_in1 <= 0 ? -999 : 20 * rnbo_log10((this->expr_02_in1 <= 0.0000000001 ? 0.0000000001 : this->expr_02_in1)))
-    );//#map:atodb_obj-31:1
-}
-
-void outport_03_input_number_set(number v) {
-    this->getEngine()->sendNumMessage(TAG("out_rms_L"), TAG(""), v, this->_currentTime);
-}
-
 void expr_03_out1_set(number v) {
     this->expr_03_out1 = v;
-    this->outport_03_input_number_set(this->expr_03_out1);
+    this->outport_02_input_number_set(this->expr_03_out1);
 }
 
 void expr_03_in1_set(number in1) {
@@ -1353,23 +2076,40 @@ void expr_03_in1_set(number in1) {
 
     this->expr_03_out1_set(
         (this->expr_03_in1 <= 0 ? -999 : 20 * rnbo_log10((this->expr_03_in1 <= 0.0000000001 ? 0.0000000001 : this->expr_03_in1)))
+    );//#map:atodb_obj-31:1
+}
+
+void outport_03_input_number_set(number v) {
+    this->getEngine()->sendNumMessage(TAG("out_rms_L"), TAG(""), v, this->_currentTime);
+}
+
+void expr_06_out1_set(number v) {
+    this->expr_06_out1 = v;
+    this->outport_03_input_number_set(this->expr_06_out1);
+}
+
+void expr_06_in1_set(number in1) {
+    this->expr_06_in1 = in1;
+
+    this->expr_06_out1_set(
+        (this->expr_06_in1 <= 0 ? -999 : 20 * rnbo_log10((this->expr_06_in1 <= 0.0000000001 ? 0.0000000001 : this->expr_06_in1)))
     );//#map:atodb_obj-32:1
 }
 
-void outport_05_input_number_set(number v) {
+void outport_04_input_number_set(number v) {
     this->getEngine()->sendNumMessage(TAG("out_rms_R"), TAG(""), v, this->_currentTime);
 }
 
-void expr_07_out1_set(number v) {
-    this->expr_07_out1 = v;
-    this->outport_05_input_number_set(this->expr_07_out1);
+void expr_10_out1_set(number v) {
+    this->expr_10_out1 = v;
+    this->outport_04_input_number_set(this->expr_10_out1);
 }
 
-void expr_07_in1_set(number in1) {
-    this->expr_07_in1 = in1;
+void expr_10_in1_set(number in1) {
+    this->expr_10_in1 = in1;
 
-    this->expr_07_out1_set(
-        (this->expr_07_in1 <= 0 ? -999 : 20 * rnbo_log10((this->expr_07_in1 <= 0.0000000001 ? 0.0000000001 : this->expr_07_in1)))
+    this->expr_10_out1_set(
+        (this->expr_10_in1 <= 0 ? -999 : 20 * rnbo_log10((this->expr_10_in1 <= 0.0000000001 ? 0.0000000001 : this->expr_10_in1)))
     );//#map:atodb_obj-33:1
 }
 
@@ -1427,6 +2167,14 @@ void selector_01_perform(
             out[(Index)i] = in2[(Index)i];
         else
             out[(Index)i] = 0;
+    }
+}
+
+void dspexpr_07_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] * in2;//#map:_###_obj_###_:1
     }
 }
 
@@ -1540,6 +2288,98 @@ void selector_02_perform(
     }
 }
 
+void dspexpr_10_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] * in2;//#map:_###_obj_###_:1
+    }
+}
+
+void dspexpr_09_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] - in2[(Index)i];//#map:_###_obj_###_:1
+    }
+}
+
+void dspexpr_13_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
+    RNBO_UNUSED(in2);
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] * 0.707107;//#map:_###_obj_###_:1
+    }
+}
+
+void dspexpr_12_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] * in2;//#map:_###_obj_###_:1
+    }
+}
+
+void dspexpr_06_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] + in2[(Index)i];//#map:_###_obj_###_:1
+    }
+}
+
+void dspexpr_04_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
+    RNBO_UNUSED(in2);
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] * 0.707107;//#map:_###_obj_###_:1
+    }
+}
+
+void dspexpr_03_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] * in2;//#map:_###_obj_###_:1
+    }
+}
+
+void dspexpr_11_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] - in2[(Index)i];//#map:_###_obj_###_:1
+    }
+}
+
+void dspexpr_14_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
+    RNBO_UNUSED(in2);
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] * 0.707107;//#map:_###_obj_###_:1
+    }
+}
+
+void dspexpr_02_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] + in2[(Index)i];//#map:_###_obj_###_:1
+    }
+}
+
+void dspexpr_01_perform(const Sample * in1, number in2, SampleValue * out1, Index n) {
+    RNBO_UNUSED(in2);
+    Index i;
+
+    for (i = 0; i < n; i++) {
+        out1[(Index)i] = in1[(Index)i] * 0.707107;//#map:_###_obj_###_:1
+    }
+}
+
 void average_rms_tilde_02_perform(
     const Sample * x,
     number windowSize,
@@ -1644,7 +2484,7 @@ void linetilde_01_perform(SampleValue * out, Index n) {
     this->linetilde_01_time = __linetilde_01_time;
 }
 
-void dspexpr_02_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
+void dspexpr_08_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
     Index i;
 
     for (i = 0; i < n; i++) {
@@ -1705,7 +2545,7 @@ void snapshot_04_perform(const SampleValue * input_signal, Index n) {
     this->snapshot_04_lastValue = __snapshot_04_lastValue;
 }
 
-void dspexpr_01_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
+void dspexpr_05_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
     Index i;
 
     for (i = 0; i < n; i++) {
@@ -1857,6 +2697,68 @@ void average_rms_tilde_01_dspsetup(bool force) {
     this->average_rms_tilde_01_av_dspsetup();
 }
 
+number line_01_valueAtTime(MillisecondTime time) {
+    return this->line_01_startValue + this->line_01_slope * (time - this->line_01_startTime);
+}
+
+void line_01_scheduleNext() {
+    MillisecondTime currentTime = (MillisecondTime)(this->currenttime());
+    number nextTime = currentTime + this->line_01_grain;
+    number nextValue;
+
+    if (nextTime - this->line_01_startTime >= this->line_01__time || this->line_01_grain == 0) {
+        nextTime = this->line_01_startTime + this->line_01__time;
+        nextValue = this->line_01_currentTarget;
+    } else {
+        nextValue = this->line_01_valueAtTime(nextTime);
+    }
+
+    this->getEngine()->scheduleClockEventWithValue(this, 1220262738, nextTime - currentTime + this->_currentTime, nextValue);;
+}
+
+void line_01_startRamp(number target, MillisecondTime time) {
+    MillisecondTime currentTime = (MillisecondTime)(this->currenttime());
+    this->line_01_startValue = this->line_01_valueAtTime(currentTime);
+    this->line_01_startTime = currentTime;
+    this->line_01_currentTarget = target;
+    this->getEngine()->flushClockEvents(this, 1220262738, false);;
+    number rise = target - this->line_01_startValue;
+    this->line_01_slope = rise / time;
+    this->line_01_scheduleNext();
+}
+
+bool line_01_isFinished(number value) {
+    return value == this->line_01_currentTarget && this->currenttime() - this->line_01_startTime >= this->line_01__time;
+}
+
+void line_01_startPendingRamp() {
+    if (this->line_01_pendingRamps->length < 2) {
+        this->line_01_pendingRamps->length = 0;
+        this->line_01__time = 0;
+        this->line_01_time_set(0);
+        this->line_01_end_bang();
+        return;
+    }
+
+    if (this->line_01_pendingRamps->length > 1) {
+        number target = this->line_01_pendingRamps->shift();
+        this->line_01__time = this->line_01_pendingRamps->shift();
+        this->line_01__time = (this->line_01__time < 0 ? 0 : this->line_01__time);
+        this->line_01_startRamp(target, this->line_01__time);
+    }
+}
+
+void param_01_getPresetValue(PatcherStateInterface& preset) {
+    preset["value"] = this->param_01_value;
+}
+
+void param_01_setPresetValue(PatcherStateInterface& preset) {
+    if ((bool)(stateIsEmpty(preset)))
+        return;
+
+    this->param_01_value_set(preset["value"]);
+}
+
 number average_rms_tilde_02_av_next(number x, int windowSize, bool reset) {
     if (windowSize > 0)
         this->average_rms_tilde_02_av_setwindowsize(windowSize);
@@ -1939,6 +2841,17 @@ void average_rms_tilde_02_dspsetup(bool force) {
 
     this->average_rms_tilde_02_setupDone = true;
     this->average_rms_tilde_02_av_dspsetup();
+}
+
+void param_02_getPresetValue(PatcherStateInterface& preset) {
+    preset["value"] = this->param_02_value;
+}
+
+void param_02_setPresetValue(PatcherStateInterface& preset) {
+    if ((bool)(stateIsEmpty(preset)))
+        return;
+
+    this->param_02_value_set(preset["value"]);
 }
 
 void delaytilde_01_del_step() {
@@ -2457,26 +3370,77 @@ void average_rms_tilde_03_dspsetup(bool force) {
     this->average_rms_tilde_03_av_dspsetup();
 }
 
-void param_01_getPresetValue(PatcherStateInterface& preset) {
-    preset["value"] = this->param_01_value;
+void param_03_getPresetValue(PatcherStateInterface& preset) {
+    preset["value"] = this->param_03_value;
 }
 
-void param_01_setPresetValue(PatcherStateInterface& preset) {
+void param_03_setPresetValue(PatcherStateInterface& preset) {
     if ((bool)(stateIsEmpty(preset)))
         return;
 
-    this->param_01_value_set(preset["value"]);
+    this->param_03_value_set(preset["value"]);
 }
 
-void param_02_getPresetValue(PatcherStateInterface& preset) {
-    preset["value"] = this->param_02_value;
+number line_02_valueAtTime(MillisecondTime time) {
+    return this->line_02_startValue + this->line_02_slope * (time - this->line_02_startTime);
 }
 
-void param_02_setPresetValue(PatcherStateInterface& preset) {
+void line_02_scheduleNext() {
+    MillisecondTime currentTime = (MillisecondTime)(this->currenttime());
+    number nextTime = currentTime + this->line_02_grain;
+    number nextValue;
+
+    if (nextTime - this->line_02_startTime >= this->line_02__time || this->line_02_grain == 0) {
+        nextTime = this->line_02_startTime + this->line_02__time;
+        nextValue = this->line_02_currentTarget;
+    } else {
+        nextValue = this->line_02_valueAtTime(nextTime);
+    }
+
+    this->getEngine()->scheduleClockEventWithValue(this, 848255507, nextTime - currentTime + this->_currentTime, nextValue);;
+}
+
+void line_02_startRamp(number target, MillisecondTime time) {
+    MillisecondTime currentTime = (MillisecondTime)(this->currenttime());
+    this->line_02_startValue = this->line_02_valueAtTime(currentTime);
+    this->line_02_startTime = currentTime;
+    this->line_02_currentTarget = target;
+    this->getEngine()->flushClockEvents(this, 848255507, false);;
+    number rise = target - this->line_02_startValue;
+    this->line_02_slope = rise / time;
+    this->line_02_scheduleNext();
+}
+
+bool line_02_isFinished(number value) {
+    return value == this->line_02_currentTarget && this->currenttime() - this->line_02_startTime >= this->line_02__time;
+}
+
+void line_02_startPendingRamp() {
+    if (this->line_02_pendingRamps->length < 2) {
+        this->line_02_pendingRamps->length = 0;
+        this->line_02__time = 0;
+        this->line_02_time_set(0);
+        this->line_02_end_bang();
+        return;
+    }
+
+    if (this->line_02_pendingRamps->length > 1) {
+        number target = this->line_02_pendingRamps->shift();
+        this->line_02__time = this->line_02_pendingRamps->shift();
+        this->line_02__time = (this->line_02__time < 0 ? 0 : this->line_02__time);
+        this->line_02_startRamp(target, this->line_02__time);
+    }
+}
+
+void param_04_getPresetValue(PatcherStateInterface& preset) {
+    preset["value"] = this->param_04_value;
+}
+
+void param_04_setPresetValue(PatcherStateInterface& preset) {
     if ((bool)(stateIsEmpty(preset)))
         return;
 
-    this->param_02_value_set(preset["value"]);
+    this->param_04_value_set(preset["value"]);
 }
 
 number average_rms_tilde_04_av_next(number x, int windowSize, bool reset) {
@@ -2563,15 +3527,48 @@ void average_rms_tilde_04_dspsetup(bool force) {
     this->average_rms_tilde_04_av_dspsetup();
 }
 
-void param_03_getPresetValue(PatcherStateInterface& preset) {
-    preset["value"] = this->param_03_value;
+void param_05_getPresetValue(PatcherStateInterface& preset) {
+    preset["value"] = this->param_05_value;
 }
 
-void param_03_setPresetValue(PatcherStateInterface& preset) {
+void param_05_setPresetValue(PatcherStateInterface& preset) {
     if ((bool)(stateIsEmpty(preset)))
         return;
 
-    this->param_03_value_set(preset["value"]);
+    this->param_05_value_set(preset["value"]);
+}
+
+void param_06_getPresetValue(PatcherStateInterface& preset) {
+    preset["value"] = this->param_06_value;
+}
+
+void param_06_setPresetValue(PatcherStateInterface& preset) {
+    if ((bool)(stateIsEmpty(preset)))
+        return;
+
+    this->param_06_value_set(preset["value"]);
+}
+
+void param_07_getPresetValue(PatcherStateInterface& preset) {
+    preset["value"] = this->param_07_value;
+}
+
+void param_07_setPresetValue(PatcherStateInterface& preset) {
+    if ((bool)(stateIsEmpty(preset)))
+        return;
+
+    this->param_07_value_set(preset["value"]);
+}
+
+void param_08_getPresetValue(PatcherStateInterface& preset) {
+    preset["value"] = this->param_08_value;
+}
+
+void param_08_setPresetValue(PatcherStateInterface& preset) {
+    if ((bool)(stateIsEmpty(preset)))
+        return;
+
+    this->param_08_value_set(preset["value"]);
 }
 
 void globaltransport_advance() {}
@@ -2609,48 +3606,99 @@ void assign_defaults()
     average_rms_tilde_01_x = 0;
     average_rms_tilde_01_windowSize = 2048;
     average_rms_tilde_01_reset = 0;
+    line_01_time = 0;
+    line_01_grain = 20;
+    line_01_output = 0;
     expr_02_in1 = 0;
     expr_02_out1 = 0;
+    param_01_value = 0;
+    expr_03_in1 = 0;
+    expr_03_out1 = 0;
     snapshot_02_interval = 30;
     snapshot_02_out = 0;
     average_rms_tilde_02_x = 0;
     average_rms_tilde_02_windowSize = 2048;
     average_rms_tilde_02_reset = 0;
-    delaytilde_01_delay = 0;
-    selector_01_onoff = 1;
-    delaytilde_02_delay = 0;
+    param_02_value = 0;
+    expr_04_$in1 = 0;
+    expr_04_out1 = 0;
     dspexpr_01_in1 = 0;
-    dspexpr_01_in2 = 0;
-    selector_02_onoff = 1;
+    dspexpr_01_in2 = 0.707107;
+    delaytilde_01_delay = 0;
     dspexpr_02_in1 = 0;
     dspexpr_02_in2 = 0;
-    expr_03_in1 = 0;
-    expr_03_out1 = 0;
+    dspexpr_03_in1 = 0;
+    dspexpr_03_in2 = 0;
+    dspexpr_04_in1 = 0;
+    dspexpr_04_in2 = 0.707107;
+    dspexpr_05_in1 = 0;
+    dspexpr_05_in2 = 0;
+    delaytilde_02_delay = 0;
+    expr_05_in1 = 0;
+    expr_05_in2 = 0;
+    expr_05_out1 = 0;
+    dspexpr_06_in1 = 0;
+    dspexpr_06_in2 = 0;
+    dspexpr_07_in1 = 0;
+    dspexpr_07_in2 = 0;
+    selector_01_onoff = 1;
+    dspexpr_08_in1 = 0;
+    dspexpr_08_in2 = 0;
+    dspexpr_09_in1 = 0;
+    dspexpr_09_in2 = 0;
+    expr_06_in1 = 0;
+    expr_06_out1 = 0;
     snapshot_03_interval = 30;
     snapshot_03_out = 0;
     average_rms_tilde_03_x = 0;
     average_rms_tilde_03_windowSize = 2048;
     average_rms_tilde_03_reset = 0;
+    dspexpr_10_in1 = 0;
+    dspexpr_10_in2 = 0;
+    selector_02_onoff = 1;
+    dspexpr_11_in1 = 0;
+    dspexpr_11_in2 = 0;
+    dspexpr_12_in1 = 0;
+    dspexpr_12_in2 = 0;
+    dspexpr_13_in1 = 0;
+    dspexpr_13_in2 = 0.707107;
+    dspexpr_14_in1 = 0;
+    dspexpr_14_in2 = 0.707107;
+    expr_07_in1 = 0;
+    expr_07_in2 = 0;
+    expr_07_out1 = 0;
     linetilde_01_time = 0;
     linetilde_01_keepramp = 0;
-    expr_04_in1 = 0;
-    expr_04_out1 = 0;
-    param_01_value = 0;
-    expr_05_$in1 = 0;
-    expr_05_out1 = 0;
-    param_02_value = 0;
-    mstosamps_01_ms = 0;
-    expr_06_$in1 = 0;
-    expr_06_$in2 = 0;
-    expr_06_out1 = 0;
-    expr_07_in1 = 0;
-    expr_07_out1 = 0;
+    expr_08_in1 = 0;
+    expr_08_out1 = 0;
+    param_03_value = 0;
+    line_02_time = 0;
+    line_02_grain = 20;
+    line_02_output = 0;
+    expr_09_in1 = 0;
+    expr_09_out1 = 0;
+    param_04_value = 0;
+    expr_10_in1 = 0;
+    expr_10_out1 = 0;
     snapshot_04_interval = 30;
     snapshot_04_out = 0;
     average_rms_tilde_04_x = 0;
     average_rms_tilde_04_windowSize = 2048;
     average_rms_tilde_04_reset = 0;
-    param_03_value = 20;
+    expr_11_$in1 = 0;
+    expr_11_out1 = 0;
+    param_05_value = 0;
+    expr_12_$in1 = 0;
+    expr_12_out1 = 0;
+    param_06_value = 0;
+    mstosamps_01_ms = 0;
+    param_07_value = 0;
+    expr_13_$in1 = 0;
+    expr_13_$in2 = 0;
+    expr_13_out1 = 0;
+    expr_14_$in1 = 0;
+    expr_14_out1 = 0;
+    param_08_value = 20;
     _currentTime = 0;
     audioProcessSampleCount = 0;
     sampleOffsetIntoNextAudioBuffer = 0;
@@ -2659,6 +3707,7 @@ void assign_defaults()
     signals[0] = nullptr;
     signals[1] = nullptr;
     signals[2] = nullptr;
+    signals[3] = nullptr;
     didAllocateSignals = 0;
     vs = 0;
     maxvs = 0;
@@ -2675,6 +3724,12 @@ void assign_defaults()
     average_rms_tilde_01_av_wantsReset = false;
     average_rms_tilde_01_av_resetFlag = false;
     average_rms_tilde_01_setupDone = false;
+    line_01_startTime = 0;
+    line_01_startValue = 0;
+    line_01_currentTarget = 0;
+    line_01_slope = 0;
+    line_01__time = 0;
+    param_01_lastValue = 0;
     snapshot_02_calc = 0;
     snapshot_02_nextTime = 0;
     snapshot_02_count = 0;
@@ -2686,6 +3741,7 @@ void assign_defaults()
     average_rms_tilde_02_av_wantsReset = false;
     average_rms_tilde_02_av_resetFlag = false;
     average_rms_tilde_02_setupDone = false;
+    param_02_lastValue = 0;
     delaytilde_01_lastDelay = -1;
     delaytilde_01_crossfadeDelay = 0;
     delaytilde_01_ramp = 0;
@@ -2718,8 +3774,13 @@ void assign_defaults()
     average_rms_tilde_03_av_resetFlag = false;
     average_rms_tilde_03_setupDone = false;
     linetilde_01_currentValue = 0;
-    param_01_lastValue = 0;
-    param_02_lastValue = 0;
+    param_03_lastValue = 0;
+    line_02_startTime = 0;
+    line_02_startValue = 0;
+    line_02_currentTarget = 0;
+    line_02_slope = 0;
+    line_02__time = 0;
+    param_04_lastValue = 0;
     snapshot_04_calc = 0;
     snapshot_04_nextTime = 0;
     snapshot_04_count = 0;
@@ -2731,7 +3792,10 @@ void assign_defaults()
     average_rms_tilde_04_av_wantsReset = false;
     average_rms_tilde_04_av_resetFlag = false;
     average_rms_tilde_04_setupDone = false;
-    param_03_lastValue = 0;
+    param_05_lastValue = 0;
+    param_06_lastValue = 0;
+    param_07_lastValue = 0;
+    param_08_lastValue = 0;
     globaltransport_tempo = nullptr;
     globaltransport_state = nullptr;
     stackprotect_count = 0;
@@ -2749,55 +3813,108 @@ void assign_defaults()
     number average_rms_tilde_01_x;
     number average_rms_tilde_01_windowSize;
     number average_rms_tilde_01_reset;
+    list line_01_target;
+    number line_01_time;
+    number line_01_grain;
+    number line_01_output;
     number expr_02_in1;
     number expr_02_out1;
+    number param_01_value;
+    number expr_03_in1;
+    number expr_03_out1;
     number snapshot_02_interval;
     number snapshot_02_out;
     number average_rms_tilde_02_x;
     number average_rms_tilde_02_windowSize;
     number average_rms_tilde_02_reset;
-    number delaytilde_01_delay;
-    number selector_01_onoff;
-    number delaytilde_02_delay;
+    number param_02_value;
+    number expr_04_$in1;
+    number expr_04_out1;
     number dspexpr_01_in1;
     number dspexpr_01_in2;
-    number selector_02_onoff;
+    number delaytilde_01_delay;
     number dspexpr_02_in1;
     number dspexpr_02_in2;
-    number expr_03_in1;
-    number expr_03_out1;
+    number dspexpr_03_in1;
+    number dspexpr_03_in2;
+    number dspexpr_04_in1;
+    number dspexpr_04_in2;
+    number dspexpr_05_in1;
+    number dspexpr_05_in2;
+    number delaytilde_02_delay;
+    number expr_05_in1;
+    number expr_05_in2;
+    number expr_05_out1;
+    number dspexpr_06_in1;
+    number dspexpr_06_in2;
+    number dspexpr_07_in1;
+    number dspexpr_07_in2;
+    number selector_01_onoff;
+    number dspexpr_08_in1;
+    number dspexpr_08_in2;
+    number dspexpr_09_in1;
+    number dspexpr_09_in2;
+    number expr_06_in1;
+    number expr_06_out1;
     number snapshot_03_interval;
     number snapshot_03_out;
     number average_rms_tilde_03_x;
     number average_rms_tilde_03_windowSize;
     number average_rms_tilde_03_reset;
+    number dspexpr_10_in1;
+    number dspexpr_10_in2;
+    number selector_02_onoff;
+    number dspexpr_11_in1;
+    number dspexpr_11_in2;
+    number dspexpr_12_in1;
+    number dspexpr_12_in2;
+    number dspexpr_13_in1;
+    number dspexpr_13_in2;
+    number dspexpr_14_in1;
+    number dspexpr_14_in2;
+    number expr_07_in1;
+    number expr_07_in2;
+    number expr_07_out1;
     list linetilde_01_segments;
     number linetilde_01_time;
     number linetilde_01_keepramp;
-    number expr_04_in1;
-    number expr_04_out1;
-    number param_01_value;
-    number expr_05_$in1;
-    number expr_05_out1;
-    number param_02_value;
-    number mstosamps_01_ms;
-    number expr_06_$in1;
-    number expr_06_$in2;
-    number expr_06_out1;
-    number expr_07_in1;
-    number expr_07_out1;
+    number expr_08_in1;
+    number expr_08_out1;
+    number param_03_value;
+    list line_02_target;
+    number line_02_time;
+    number line_02_grain;
+    number line_02_output;
+    number expr_09_in1;
+    number expr_09_out1;
+    number param_04_value;
+    number expr_10_in1;
+    number expr_10_out1;
     number snapshot_04_interval;
     number snapshot_04_out;
     number average_rms_tilde_04_x;
     number average_rms_tilde_04_windowSize;
     number average_rms_tilde_04_reset;
-    number param_03_value;
+    number expr_11_$in1;
+    number expr_11_out1;
+    number param_05_value;
+    number expr_12_$in1;
+    number expr_12_out1;
+    number param_06_value;
+    number mstosamps_01_ms;
+    number param_07_value;
+    number expr_13_$in1;
+    number expr_13_$in2;
+    number expr_13_out1;
+    number expr_14_$in1;
+    number expr_14_out1;
+    number param_08_value;
     MillisecondTime _currentTime;
     UInt64 audioProcessSampleCount;
     SampleIndex sampleOffsetIntoNextAudioBuffer;
     signal zeroBuffer;
     signal dummyBuffer;
-    SampleValue * signals[3];
+    SampleValue * signals[4];
     bool didAllocateSignals;
     Index vs;
     Index maxvs;
@@ -2815,6 +3932,13 @@ void assign_defaults()
     bool average_rms_tilde_01_av_resetFlag;
     Float64BufferRef average_rms_tilde_01_av_buffer;
     bool average_rms_tilde_01_setupDone;
+    MillisecondTime line_01_startTime;
+    number line_01_startValue;
+    number line_01_currentTarget;
+    number line_01_slope;
+    MillisecondTime line_01__time;
+    list line_01_pendingRamps;
+    number param_01_lastValue;
     number snapshot_02_calc;
     number snapshot_02_nextTime;
     SampleIndex snapshot_02_count;
@@ -2827,6 +3951,7 @@ void assign_defaults()
     bool average_rms_tilde_02_av_resetFlag;
     Float64BufferRef average_rms_tilde_02_av_buffer;
     bool average_rms_tilde_02_setupDone;
+    number param_02_lastValue;
     number delaytilde_01_lastDelay;
     number delaytilde_01_crossfadeDelay;
     number delaytilde_01_ramp;
@@ -2863,8 +3988,14 @@ void assign_defaults()
     bool average_rms_tilde_03_setupDone;
     list linetilde_01_activeRamps;
     number linetilde_01_currentValue;
-    number param_01_lastValue;
-    number param_02_lastValue;
+    number param_03_lastValue;
+    MillisecondTime line_02_startTime;
+    number line_02_startValue;
+    number line_02_currentTarget;
+    number line_02_slope;
+    MillisecondTime line_02__time;
+    list line_02_pendingRamps;
+    number param_04_lastValue;
     number snapshot_04_calc;
     number snapshot_04_nextTime;
     SampleIndex snapshot_04_count;
@@ -2877,7 +4008,10 @@ void assign_defaults()
     bool average_rms_tilde_04_av_resetFlag;
     Float64BufferRef average_rms_tilde_04_av_buffer;
     bool average_rms_tilde_04_setupDone;
-    number param_03_lastValue;
+    number param_05_lastValue;
+    number param_06_lastValue;
+    number param_07_lastValue;
+    number param_08_lastValue;
     signal globaltransport_tempo;
     signal globaltransport_state;
     number stackprotect_count;

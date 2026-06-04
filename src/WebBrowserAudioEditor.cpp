@@ -98,7 +98,17 @@ WebBrowserAudioEditor::WebBrowserAudioEditor (CustomAudioProcessor* const p,
         _tempAttachment = std::make_unique<WebSliderParameterAttachment> (
             findParameter (p, "temperature"), _tempRelay, nullptr);
         _distAttachment = std::make_unique<WebSliderParameterAttachment> (
-            findParameter (p, "distance"), _distRelay, nullptr);    
+            findParameter (p, "distance"), _distRelay, nullptr);
+        _phaseInvAttachment = std::make_unique<WebToggleButtonParameterAttachment> (
+            findParameter (p, "phase_inv"), _phaseInvRelay, nullptr);
+        _midGainAttachment = std::make_unique<WebSliderParameterAttachment> (
+            findParameter (p, "mid_gain"), _midGainRelay, nullptr);
+        _sideGainAttachment = std::make_unique<WebSliderParameterAttachment> (
+            findParameter (p, "side_gain"), _sideGainRelay, nullptr);
+        _midMuteAttachment = std::make_unique<WebToggleButtonParameterAttachment> (
+            findParameter (p, "mid_mute"), _midMuteRelay, nullptr);
+        _sideMuteAttachment = std::make_unique<WebToggleButtonParameterAttachment> (
+            findParameter (p, "side_mute"), _sideMuteRelay, nullptr);
     }
     catch (const std::exception& e)
     {
@@ -114,7 +124,7 @@ WebBrowserAudioEditor::WebBrowserAudioEditor (CustomAudioProcessor* const p,
 
     setResizable (true, true);
     setResizeLimits (260, 300, 720, 900);
-    setSize (380, 420);
+    setSize (560, 400);
 
     startTimerHz (60);
 }
