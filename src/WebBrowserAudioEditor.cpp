@@ -116,7 +116,7 @@ WebBrowserAudioEditor::WebBrowserAudioEditor (CustomAudioProcessor* const p,
     }
 
     setResizable (true, true);
-    setResizeLimits (600, 550, 720, 900);
+    setResizeLimits (600, 650, 720, 900);
 
     addAndMakeVisible (_webComponent);
 
@@ -125,7 +125,7 @@ WebBrowserAudioEditor::WebBrowserAudioEditor (CustomAudioProcessor* const p,
     _webComponent.goToURL (kDevServerAddress);
     //_webComponent.goToURL(WebBrowserComponent::getResourceProviderRoot());
 
-    setSize (600, 550);
+    setSize (600, 650);
 
     startTimerHz (60);
 }

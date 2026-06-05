@@ -112,7 +112,7 @@ function waitForJUCE(maxWaitMs = 5000) {
 const UI_LIMITS = {
     MIN_WIDTH: 600,
     MAX_WIDTH: 720,
-    MIN_HEIGHT: 550,
+    MIN_HEIGHT: 650,
     MAX_HEIGHT: 900
 };
 
@@ -304,6 +304,118 @@ function formatNumericValue(value, decimals = 1) {
 }
 
 // ===== FUNZIONI GRAFICHE METER =====
+let outStatsState = {
+    maxPeakL: Number.NEGATIVE_INFINITY,
+    maxPeakR: Number.NEGATIVE_INFINITY,
+    maxRmsL: Number.NEGATIVE_INFINITY,
+    maxRmsR: Number.NEGATIVE_INFINITY,
+    maxDeltaL: Number.NEGATIVE_INFINITY, 
+    maxDeltaR: Number.NEGATIVE_INFINITY,
+    sumLinearPeak: 0.0,
+    sumLinearRms: 0.0,
+    frameCount: 0
+};
+
+const statsDbToLinear = (db) => (!Number.isFinite(db) || db <= SILENCE_DB) ? 0.0 : Math.pow(10, db / 20);
+const statsLinearToDb = (linear) => (linear <= 0.00001) ? Number.NEGATIVE_INFINITY : 20 * Math.log10(linear);
+
+function initOutputStats() {
+    const resetBtn = document.getElementById('resetStatsBtn');
+    if (resetBtn) {
+        resetBtn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            
+            outStatsState.maxPeakL = Number.NEGATIVE_INFINITY;
+            outStatsState.maxPeakR = Number.NEGATIVE_INFINITY;
+            outStatsState.maxRmsL = Number.NEGATIVE_INFINITY;
+            outStatsState.maxRmsR = Number.NEGATIVE_INFINITY;
+            outStatsState.sumLinearPeak = 0.0;
+            outStatsState.sumLinearRms = 0.0;
+            outStatsState.frameCount = 0;
+            outStatsState.maxDeltaL = Number.NEGATIVE_INFINITY;
+            outStatsState.maxDeltaR = Number.NEGATIVE_INFINITY;
+            
+            updateOutputStatsUI();
+            debugLog('✓ Output Stats Reset', 'SUCCESS');
+        });
+    }
+}
+
+function processOutputStats(outPeakL, outPeakR, outRmsL, outRmsR) {
+    const pL = normalizeDb(outPeakL);
+    const pR = normalizeDb(outPeakR);
+    const rL = normalizeDb(outRmsL);
+    const rR = normalizeDb(outRmsR);
+
+    if (pL > outStatsState.maxPeakL) outStatsState.maxPeakL = pL;
+    if (pR > outStatsState.maxPeakR) outStatsState.maxPeakR = pR;
+    if (rL > outStatsState.maxRmsL) outStatsState.maxRmsL = rL;
+    if (rR > outStatsState.maxRmsR) outStatsState.maxRmsR = rR;
+
+    const currentLinearPeak = (statsDbToLinear(pL) + statsDbToLinear(pR)) / 2.0;
+    const currentLinearRms  = (statsDbToLinear(rL) + statsDbToLinear(rR)) / 2.0;
+
+    outStatsState.sumLinearPeak += currentLinearPeak;
+    outStatsState.sumLinearRms  += currentLinearRms;
+    outStatsState.frameCount++;
+
+    updateOutputStatsUI();
+}
+
+function updateOutputStatsUI() {
+    // 1. Formattazione classici Peak e RMS
+    document.getElementById('maxOutPeakL').textContent = formatDbValue(outStatsState.maxPeakL);
+    document.getElementById('maxOutPeakR').textContent = formatDbValue(outStatsState.maxPeakR);
+    document.getElementById('maxOutRmsL').textContent = formatDbValue(outStatsState.maxRmsL);
+    document.getElementById('maxOutRmsR').textContent = formatDbValue(outStatsState.maxRmsR);
+
+    // 2. Calcolo e calibrazione del CREST FACTOR (Peak dB - RMS dB)
+    // Se non c'è segnale (valori a -Infinity), il Crest Factor è 0
+    let crestL = 0.0;
+    let crestR = 0.0;
+    if (outStatsState.maxPeakL > Number.NEGATIVE_INFINITY && outStatsState.maxRmsL > Number.NEGATIVE_INFINITY) {
+        crestL = outStatsState.maxPeakL - outStatsState.maxRmsL;
+    }
+    if (outStatsState.maxPeakR > Number.NEGATIVE_INFINITY && outStatsState.maxRmsR > Number.NEGATIVE_INFINITY) {
+        crestR = outStatsState.maxPeakR - outStatsState.maxRmsR;
+    }
+    document.getElementById('crestFactorL').textContent = crestL.toFixed(1) + " dB";
+    document.getElementById('crestFactorR').textContent = crestR.toFixed(1) + " dB";
+
+    // 3. Calcolo DELTA GAIN (Differenza tra RMS Massimo registrato e il Gain impostato)
+    let deltaL = outStatsState.maxDeltaL;
+    let deltaR = outStatsState.maxDeltaR;
+
+    if (deltaL === Number.NEGATIVE_INFINITY || isNaN(deltaL)) {
+        document.getElementById('deltaGainL').textContent = "0.0 dB";
+    } else {
+        document.getElementById('deltaGainL').textContent = (deltaL > 0 ? "+" : "") + deltaL.toFixed(1) + " dB";
+    }
+
+    if (deltaR === Number.NEGATIVE_INFINITY || isNaN(deltaR)) {
+        document.getElementById('deltaGainR').textContent = "0.0 dB";
+    } else {
+        document.getElementById('deltaGainR').textContent = (deltaR > 0 ? "+" : "") + deltaR.toFixed(1) + " dB";
+    }
+    
+    // 4. Formattazione Medie Storiche esistenti
+    if (outStatsState.frameCount > 0) {
+        let avgPeakDb = 20 * Math.log10(outStatsState.sumLinearPeak / outStatsState.frameCount);
+        let avgRmsDb = 20 * Math.log10(outStatsState.sumLinearRms / outStatsState.frameCount);
+        document.getElementById('avgOutPeak').textContent = formatDbValue(avgPeakDb);
+        document.getElementById('avgOutRms').textContent = formatDbValue(avgRmsDb);
+    } else {
+        document.getElementById('avgOutPeak').textContent = "−∞";
+        document.getElementById('avgOutRms').textContent = "−∞";
+    }
+}
+
+// Funzione helper di supporto se non già presente nel tuo script
+function formatDbValue(val) {
+    if (val === Number.NEGATIVE_INFINITY || val < -100) return "−∞";
+    return val.toFixed(1) + " dB";
+}
+
 function normalizeDb(raw) {
     const v = Number(raw);
     if (!Number.isFinite(v) || v <= SILENCE_DB)
@@ -892,6 +1004,16 @@ function wireMeters() {
             );
             setDelayTime(data.delayTime, data.sampleRate);
 
+            if (data.outL !== undefined && data.inL !== undefined) {
+                const currentDeltaL = data.outL - data.inL;
+                const currentDeltaR = data.outR - data.inR;
+        
+                outStatsState.maxDeltaL = currentDeltaL;
+                outStatsState.maxDeltaR = currentDeltaR;
+            }
+            processOutputStats(data.outPeakL, data.outPeakR, data.outL, data.outR);
+            updateOutputStatsUI();
+
             if (data.correlationValue !== undefined) {
                 updateCorrelationUI(data.correlationValue);
             }
@@ -931,6 +1053,7 @@ function init() {
     wirePhaseControls();
     wireMSMatrix();
     wireMeters();
+    initOutputStats();
 
     wireWindowResize();
 
@@ -961,6 +1084,7 @@ async function initAsync() {
     wirePhaseControls();
     wireMSMatrix();
     wireMeters();
+    initOutputStats();
 
     wireWindowResize();
 
