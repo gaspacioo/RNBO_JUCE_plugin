@@ -1,7 +1,7 @@
 import * as Juce from "juce-framework-frontend";
 
 // ===== DEBUG WINDOW =====
-const DEBUG_ENABLED = true;
+const DEBUG_ENABLED = false;
 const DEBUG_LOGS = [];
 const MAX_LOGS = 50;
 
@@ -109,6 +109,13 @@ function waitForJUCE(maxWaitMs = 5000) {
 }
 
 // ===== COSTANTI =====
+const UI_LIMITS = {
+    MIN_WIDTH: 600,
+    MAX_WIDTH: 720,
+    MIN_HEIGHT: 550,
+    MAX_HEIGHT: 900
+};
+
 const METER_MIN_DB = -60;
 const METER_MAX_DB = 0;
 const CLIP_THRESHOLD_DB = -0.1;
@@ -151,6 +158,7 @@ let correlationValue = 0;
 let scopeX = 0;
 let scopeY = 0;
 
+// ===== MENU ABOUT =====
 function setupAboutMenu() {
     const modal = document.getElementById("aboutModal");
     const infoBtn = document.getElementById("infoBtn");
@@ -177,6 +185,49 @@ function setupAboutMenu() {
             toggleAboutMenu();
         }
     };
+}
+
+// ===== RESIZE WINDOW =====
+function wireWindowResize() {
+    const corner = document.getElementById('resize-corner');
+    if (!corner) return;
+
+    let startX, startY, startWidth, startHeight;
+    let resizeWindowNative = null;
+
+    try {
+        resizeWindowNative = Juce.getNativeFunction("resizeWindow");
+    } catch (e) {
+        console.error("Impossibile trovare la funzione nativa resizeWindow", e);
+    }
+
+    corner.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        startX = e.clientX;
+        startY = e.clientY;
+        startWidth = window.innerWidth;
+        startHeight = window.innerHeight;
+
+        document.addEventListener('mousemove', doResize);
+        document.addEventListener('mouseup', stopResize);
+    });
+
+    function doResize(e) {
+        let newWidth = startWidth + (e.clientX - startX);
+        let newHeight = startHeight + (e.clientY - startY);
+
+        newWidth = Math.max(UI_LIMITS.MIN_WIDTH, Math.min(UI_LIMITS.MAX_WIDTH, newWidth));
+        newHeight = Math.max(UI_LIMITS.MIN_HEIGHT, Math.min(UI_LIMITS.MAX_HEIGHT, newHeight));
+
+        if (resizeWindowNative) {
+            resizeWindowNative(newWidth, newHeight);
+        }
+    }
+
+    function stopResize() {
+        document.removeEventListener('mousemove', doResize);
+        document.removeEventListener('mouseup', stopResize);
+    }
 }
 
 // ===== FUNZIONI DI NORMALIZZAZIONE =====
@@ -880,6 +931,9 @@ function init() {
     wirePhaseControls();
     wireMSMatrix();
     wireMeters();
+
+    wireWindowResize();
+
     debugLog('=== Init Complete ===', 'SUCCESS');
 }
 
@@ -907,6 +961,9 @@ async function initAsync() {
     wirePhaseControls();
     wireMSMatrix();
     wireMeters();
+
+    wireWindowResize();
+
     debugLog('=== Init Complete ===', 'SUCCESS');
 }
 

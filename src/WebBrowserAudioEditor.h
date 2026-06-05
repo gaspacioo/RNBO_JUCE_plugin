@@ -57,6 +57,17 @@ private:
                 .withUserDataFolder (juce::File::getSpecialLocation (
                     juce::File::SpecialLocationType::tempDirectory)))
             .withNativeIntegrationEnabled()
+            .withNativeFunction("resizeWindow", [this] (const juce::Array<juce::var>& args, juce::WebBrowserComponent::NativeFunctionCompletion completion) {
+                if (args.size() == 2) {
+                    int newWidth  = args[0];
+                    int newHeight = args[1];
+
+                    juce::MessageManager::callAsync ([this, newWidth, newHeight]() {
+                        setSize (newWidth, newHeight);
+                    });
+                }
+                completion (juce::var());
+            })
             .withOptionsFrom (_gainRelay)
             .withOptionsFrom (_tempRelay)
             .withOptionsFrom (_distRelay)

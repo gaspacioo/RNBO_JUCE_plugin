@@ -115,6 +115,9 @@ WebBrowserAudioEditor::WebBrowserAudioEditor (CustomAudioProcessor* const p,
         DBG ("WebBrowserAudioEditor: parameter attach failed: " + String (e.what()));
     }
 
+    setResizable (true, true);
+    setResizeLimits (600, 550, 720, 900);
+
     addAndMakeVisible (_webComponent);
 
     // Try the dev server first. If nothing is listening on that port,
@@ -122,9 +125,7 @@ WebBrowserAudioEditor::WebBrowserAudioEditor (CustomAudioProcessor* const p,
     _webComponent.goToURL (kDevServerAddress);
     //_webComponent.goToURL(WebBrowserComponent::getResourceProviderRoot());
 
-    setResizable (true, true);
-    setResizeLimits (260, 300, 720, 900);
-    setSize (560, 500);
+    setSize (600, 550);
 
     startTimerHz (60);
 }

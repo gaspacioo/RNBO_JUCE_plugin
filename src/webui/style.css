@@ -33,6 +33,30 @@ body {
     user-select: none;
 }
 
+.resize-corner {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 16px;
+    height: 16px;
+    cursor: nwse-resize;
+    z-index: 99999; /* Sopra a qualsiasi altro elemento web */
+    
+    /* Elegante texture a linee oblique dorate */
+    background: linear-gradient(135deg, 
+        transparent 30%, rgb(194, 146, 68) 30%, rgb(194, 146, 68) 40%, 
+        transparent 40%, transparent 60%, rgb(194, 146, 68) 60%, rgb(194, 146, 68) 70%, 
+        transparent 70%
+    );
+    background-size: 5px 5px;
+    opacity: 0.5;
+    transition: opacity 0.15s ease;
+}
+
+.resize-corner:hover {
+    opacity: 1.0;
+}
+
 /* ==========================================================================
    METERS LOGIC & LAYOUT
    ========================================================================== */
