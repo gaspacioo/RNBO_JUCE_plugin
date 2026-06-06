@@ -683,6 +683,7 @@ function wireGain({ paramId, sliderId, labelId, minDb, maxDb, stepDb, defaultDb 
         event.preventDefault();
         debugLog('Slider double-clicked, resetting to default (0 dB)');
         setGainDb(defaultDb);
+        slider.blur();
         sync();
     });
 
