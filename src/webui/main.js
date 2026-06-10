@@ -6,53 +6,10 @@ const DEBUG_LOGS = [];
 const MAX_LOGS = 50;
 
 function createDebugWindow() {
-    if (document.getElementById('debugWindow'))
-        return;
-
-    const debugWindow = document.createElement('div');
-    debugWindow.id = 'debugWindow';
-    debugWindow.style.cssText = `
-        position: fixed;
-        bottom: 10px;
-        right: 10px;
-        width: 400px;
-        max-height: 300px;
-        background: #1e1e1e;
-        border: 2px solid #00ff00;
-        border-radius: 4px;
-        color: #00ff00;
-        font-family: monospace;
-        font-size: 11px;
-        overflow-y: auto;
-        z-index: 99999;
-        padding: 8px;
-        box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
-    `;
-
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = '✕';
-    closeBtn.style.cssText = `
-        position: absolute;
-        top: 5px;
-        right: 5px;
-        background: #00ff00;
-        color: #1e1e1e;
-        border: none;
-        width: 20px;
-        height: 20px;
-        cursor: pointer;
-        border-radius: 2px;
-        font-weight: bold;
-    `;
-    closeBtn.onclick = () => debugWindow.style.display = 'none';
-    debugWindow.appendChild(closeBtn);
-
-    const content = document.createElement('div');
-    content.id = 'debugContent';
-    content.style.marginTop = '20px';
-    debugWindow.appendChild(content);
-
-    document.body.appendChild(debugWindow);
+    const win = document.getElementById('debugWindow');
+    if (!win) return;
+    if (DEBUG_ENABLED) win.style.display = 'block';
+    win.querySelector('.debug-close-btn').onclick = () => { win.style.display = 'none'; };
 }
 
 function debugLog(msg, level = 'INFO') {
@@ -121,6 +78,7 @@ const METER_MAX_DB = 0;
 const CLIP_THRESHOLD_DB = -0.1;
 const CLIP_HOLD_MS = 400;
 const SILENCE_DB = -90;
+const DELTA_SMOOTH = 0.97;  // EMA α — ~0.5s time constant at 60 Hz
 
 const GAIN_MIN_DB = -60;
 const GAIN_MAX_DB = 12;
@@ -155,8 +113,16 @@ const DIST_RANGE = { start: DIST_MIN, end: DIST_MAX, skew: 1 };
 const clipHold = { input: null, output: null };
 
 let correlationValue = 0;
-let scopeX = 0;
-let scopeY = 0;
+let _vsLastX = null;
+let _vsLastY = null;
+let _vsPendingBatch = null;
+
+const VS_ZOOM_MIN  = 0.25;
+const VS_ZOOM_MAX  = 8.0;
+const VS_ZOOM_STEP = 1.2;
+let _vsZoom          = 1.0;
+let _vsShowOverlay   = true;
+let _vsOverlayCanvas = null;
 
 // ===== MENU ABOUT =====
 function setupAboutMenu() {
@@ -386,17 +352,11 @@ function updateOutputStatsUI() {
     let deltaL = outStatsState.maxDeltaL;
     let deltaR = outStatsState.maxDeltaR;
 
-    if (deltaL === Number.NEGATIVE_INFINITY || isNaN(deltaL)) {
-        document.getElementById('deltaGainL').textContent = "0.0 dB";
-    } else {
-        document.getElementById('deltaGainL').textContent = (deltaL > 0 ? "+" : "") + deltaL.toFixed(1) + " dB";
-    }
+    document.getElementById('deltaGainL').textContent =
+        (!Number.isFinite(deltaL)) ? "−∞" : (deltaL > 0 ? "+" : "") + deltaL.toFixed(1) + " dB";
 
-    if (deltaR === Number.NEGATIVE_INFINITY || isNaN(deltaR)) {
-        document.getElementById('deltaGainR').textContent = "0.0 dB";
-    } else {
-        document.getElementById('deltaGainR').textContent = (deltaR > 0 ? "+" : "") + deltaR.toFixed(1) + " dB";
-    }
+    document.getElementById('deltaGainR').textContent =
+        (!Number.isFinite(deltaR)) ? "−∞" : (deltaR > 0 ? "+" : "") + deltaR.toFixed(1) + " dB";
     
     // 4. Formattazione Medie Storiche esistenti
     if (outStatsState.frameCount > 0) {
@@ -410,7 +370,6 @@ function updateOutputStatsUI() {
     }
 }
 
-// Funzione helper di supporto se non già presente nel tuo script
 function formatDbValue(val) {
     if (val === Number.NEGATIVE_INFINITY || val < -100) return "−∞";
     return val.toFixed(1) + " dB";
@@ -540,34 +499,121 @@ function drawVectorscope() {
     const canvas = document.getElementById('vectorscopeCanvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    
-    // 1. EFFETTO SCIA: Invece di clearRect, disegniamo il background con opacità bassa
-    // L'hex #0f0f0f corrisponde a rgb(15, 15, 15). Usiamo un alpha di 0.15 o 0.2
-    ctx.fillStyle = 'rgba(15, 15, 15, 0.15)'; 
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const w  = canvas.width;
+    const h  = canvas.height;
+    const cx = w * 0.5;
+    const cy = h * 0.5;
 
-    // 2. Assicurati che le variabili scopeX e scopeY siano valorizzate
-    if (typeof scopeX !== 'undefined' && typeof scopeY !== 'undefined') {
-        // Mappatura da valori RNBO (solitamente -1 a +1) alle coordinate del canvas
-        // (Adattala se i tuoi valori da RNBO hanno un range diverso)
-        const x = (scopeX + 1) * 0.5 * canvas.width;
-        
-        // Invertiamo l'asse Y perché nel canvas lo 0 è in alto
-        const y = (1 - scopeY) * 0.5 * canvas.height;
+    // Fade lento: persistenza ~2s a 60fps (fosforo CRT)
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(15, 15, 15, 0.04)';
+    ctx.fillRect(0, 0, w, h);
 
-        // 3. Disegna il punto del nuovo campione (uso il colore dorato del tuo CSS)
-        ctx.fillStyle = 'rgb(194, 146, 68)';
+    if (_vsPendingBatch) {
+        const { bx, by } = _vsPendingBatch;
+        _vsPendingBatch = null;
+
+        ctx.save();
+        ctx.shadowBlur = 5;
+        ctx.shadowColor = 'rgba(194, 146, 68, 0.8)';
+        ctx.strokeStyle = 'rgb(240, 195, 120)';
+        ctx.lineWidth = 1.2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         ctx.beginPath();
-        // Disegna un cerchio di 1.5px per essere preciso ma visibile
-        ctx.arc(x, y, 1.5, 0, Math.PI * 2);
-        ctx.fill();
+
+        if (_vsLastX !== null) ctx.moveTo(_vsLastX, _vsLastY);
+
+        for (let i = 0; i < bx.length; i++) {
+            const x = cx - bx[i] * cx * _vsZoom;  // negato: L→sinistra, R→destra
+            const y = cy - by[i] * cy * _vsZoom;
+            if (i === 0 && _vsLastX === null) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+            _vsLastX = x;
+            _vsLastY = y;
+        }
+
+        ctx.stroke();
+        ctx.restore();
     }
 
-    // Richiama l'animazione al prossimo frame
+    
+    if (_vsOverlayCanvas) {
+        const oc   = _vsOverlayCanvas;
+        const octx = oc.getContext('2d');
+        octx.clearRect(0, 0, oc.width, oc.height);
+
+        if (_vsShowOverlay) {
+            drawVectorscopeOverlay(octx, oc.width, oc.height, cx, cy);
+
+            if (_vsLastX !== null) {
+                octx.save();
+                octx.shadowBlur = 8;
+                octx.shadowColor = 'rgba(255, 220, 100, 1)';
+                octx.fillStyle = 'rgb(255, 240, 180)';
+                octx.beginPath();
+                octx.arc(_vsLastX, _vsLastY, 2, 0, Math.PI * 2);
+                octx.fill();
+                octx.restore();
+            }
+        }
+    }
+
     requestAnimationFrame(drawVectorscope);
 }
 
+function drawVectorscopeOverlay(ctx, w, h, cx, cy) {
+    const r  = Math.min(cx, cy) - 1;
+    const d  = r * 0.7071;   // r / sqrt(2) — diagonal axis endpoints
+    const lr = r * 0.65;     // label position radius
+    const ld = lr * 0.7071;
+
+    ctx.save();
+    ctx.shadowBlur = 0;
+
+    // Reference grid lines
+    ctx.strokeStyle = 'rgba(194, 146, 68, 0.9)';
+    ctx.lineWidth = 0.5;
+
+    // Outer circle (unity amplitude boundary)
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // M axis (vertical) and S axis (horizontal)
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r);
+    ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy);
+    ctx.stroke();
+
+    // L and R diagonal reference lines (±45°)
+    ctx.beginPath();
+    ctx.moveTo(cx - d, cy + d); ctx.lineTo(cx + d, cy - d); // L channel: upper-right
+    ctx.moveTo(cx + d, cy + d); ctx.lineTo(cx - d, cy - d); // R channel: upper-left
+    ctx.stroke();
+
+    ctx.restore();
+}
+
 // ===== CORE LOGIC: SLIDER E PARAMETRI =====
+const FADER_UNITY_POS = 0.75;
+
+function gainDbToSliderPos(db, minDb, maxDb) {
+    const clamped = Math.max(minDb, Math.min(maxDb, db));
+    if (clamped <= 0)
+        return FADER_UNITY_POS * (clamped - minDb) / -minDb;
+    else
+        return FADER_UNITY_POS + (1 - FADER_UNITY_POS) * clamped / maxDb;
+}
+
+function sliderPosToGainDb(pos, minDb, maxDb) {
+    const clamped = Math.max(0, Math.min(1, pos));
+    if (clamped <= FADER_UNITY_POS)
+        return minDb + (clamped / FADER_UNITY_POS) * -minDb;
+    else
+        return (clamped - FADER_UNITY_POS) / (1 - FADER_UNITY_POS) * maxDb;
+}
+
 function wireGain({ paramId, sliderId, labelId, minDb, maxDb, stepDb, defaultDb }) {
     debugLog('wireGain: Starting...');
 
@@ -600,9 +646,9 @@ function wireGain({ paramId, sliderId, labelId, minDb, maxDb, stepDb, defaultDb 
     debugLog('✓ Slider state obtained', 'SUCCESS');
     
     const fallbackRange = { start: minDb, end: maxDb, skew: 1 };
-    slider.min = String(minDb);
-    slider.max = String(maxDb);
-    slider.step = String(stepDb);
+    slider.min = "0";
+    slider.max = "1";
+    slider.step = "any";
 
     const sync = () => {
         try {
@@ -617,7 +663,7 @@ function wireGain({ paramId, sliderId, labelId, minDb, maxDb, stepDb, defaultDb 
             label.textContent = db.toFixed(1) + ' dB';
 
             if (document.activeElement !== slider) {
-                slider.value = db.toFixed(1).replace(',', '.');
+                slider.value = gainDbToSliderPos(db, minDb, maxDb).toFixed(4);
                 debugLog(`  Updated slider visual to: ${slider.value}`);
             }
         } catch (e) {
@@ -675,8 +721,8 @@ function wireGain({ paramId, sliderId, labelId, minDb, maxDb, stepDb, defaultDb 
     });
 
     slider.addEventListener('input', () => {
-        const cleanValue = slider.value.replace(',', '.');
-        setGainDb(parseFloat(cleanValue));
+        const pos = parseFloat(slider.value.replace(',', '.'));
+        setGainDb(sliderPosToGainDb(pos, minDb, maxDb));
     });
 
     slider.addEventListener('dblclick', (event) => {
@@ -1006,11 +1052,22 @@ function wireMeters() {
             setDelayTime(data.delayTime, data.sampleRate);
 
             if (data.outL !== undefined && data.inL !== undefined) {
-                const currentDeltaL = data.outL - data.inL;
-                const currentDeltaR = data.outR - data.inR;
-        
-                outStatsState.maxDeltaL = currentDeltaL;
-                outStatsState.maxDeltaR = currentDeltaR;
+                const inLdb  = normalizeDb(data.inL);
+                const inRdb  = normalizeDb(data.inR);
+                const outLdb = normalizeDb(data.outL);
+                const outRdb = normalizeDb(data.outR);
+                if (Number.isFinite(inLdb) && Number.isFinite(outLdb)) {
+                    const rawL = outLdb - inLdb;
+                    outStatsState.maxDeltaL = Number.isFinite(outStatsState.maxDeltaL)
+                        ? DELTA_SMOOTH * outStatsState.maxDeltaL + (1 - DELTA_SMOOTH) * rawL
+                        : rawL;
+                }
+                if (Number.isFinite(inRdb) && Number.isFinite(outRdb)) {
+                    const rawR = outRdb - inRdb;
+                    outStatsState.maxDeltaR = Number.isFinite(outStatsState.maxDeltaR)
+                        ? DELTA_SMOOTH * outStatsState.maxDeltaR + (1 - DELTA_SMOOTH) * rawR
+                        : rawR;
+                }
             }
             processOutputStats(data.outPeakL, data.outPeakR, data.outL, data.outR);
             updateOutputStatsUI();
@@ -1019,16 +1076,37 @@ function wireMeters() {
                 updateCorrelationUI(data.correlationValue);
             }
             
-            if (data.scopeX !== undefined && data.scopeY !== undefined) {
-                scopeX = data.scopeX;
-                scopeY = data.scopeY;
-            }
+            if (data.scopeBatchX && data.scopeBatchX.length > 0)
+                _vsPendingBatch = { bx: data.scopeBatchX, by: data.scopeBatchY };
         });
         debugLog('✓ meterLevels event listener added', 'SUCCESS');
     } catch (e) {
         debugLog(`✗ Error adding meterLevels listener: ${e.message}`, 'ERROR');
     }
+    setupVectorscopeZoom();
     drawVectorscope();
+}
+
+function changeVsZoom(direction) {
+    _vsZoom = direction > 0
+        ? Math.min(VS_ZOOM_MAX, _vsZoom * VS_ZOOM_STEP)
+        : Math.max(VS_ZOOM_MIN, _vsZoom / VS_ZOOM_STEP);
+
+    _vsLastX = null;
+    _vsLastY = null;
+}
+
+function setupVectorscopeZoom() {
+    _vsOverlayCanvas = document.getElementById('vectorscopeOverlay');
+
+    document.getElementById('vsZoomIn').addEventListener('click', () => changeVsZoom(1));
+    document.getElementById('vsZoomOut').addEventListener('click', () => changeVsZoom(-1));
+
+    const btnOverlay = document.getElementById('vsOverlayToggle');
+    btnOverlay.addEventListener('click', () => {
+        _vsShowOverlay = !_vsShowOverlay;
+        btnOverlay.style.opacity = _vsShowOverlay ? '1' : '0.35';
+    });
 }
 
 function init() {

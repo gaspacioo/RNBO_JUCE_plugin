@@ -205,14 +205,6 @@
     {
       "tag": "delay_time",
       "meta": ""
-    },
-    {
-      "tag": "scopeY",
-      "meta": ""
-    },
-    {
-      "tag": "scopeX",
-      "meta": ""
     }
   ],
   "inlets": [

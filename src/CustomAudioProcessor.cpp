@@ -92,9 +92,15 @@ void CustomAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
 {
     RNBO::JuceAudioProcessor::prepareToPlay (sampleRate, samplesPerBlock);
 
+    const float sr = static_cast<float> (sampleRate > 0.0 ? sampleRate : 44100.0);
+
     constexpr float peakFallDbPerSec = 12.0f;
-    _peakDecayDbPerBlock = peakFallDbPerSec * static_cast<float> (samplesPerBlock)
-                           / static_cast<float> (sampleRate > 0.0 ? sampleRate : 44100.0);
+    _peakDecayDbPerBlock = peakFallDbPerSec * static_cast<float> (samplesPerBlock) / sr;
+
+    // Calcola il downsample per ottenere ~200 punti/frame a 60 Hz qualunque sia il sample rate
+    constexpr int targetPointsPerFrame = 200;
+    constexpr int webViewFps           = 60;
+    _scopeDownsample = std::max (1, static_cast<int> (std::round (sr / (targetPointsPerFrame * webViewFps))));
 
     meterLevels.inPeakL.store (kSilenceDb, std::memory_order_relaxed);
     meterLevels.inPeakR.store (kSilenceDb, std::memory_order_relaxed);
@@ -142,6 +148,28 @@ void CustomAudioProcessor::measurePeaks (const juce::AudioBuffer<float>& buffer,
     }
 }
 
+void CustomAudioProcessor::fillScopeFifo (const juce::AudioBuffer<float>& buffer)
+{
+    const int numSamples  = buffer.getNumSamples();
+    const int numChannels = buffer.getNumChannels();
+    const auto* chL = buffer.getReadPointer (0);
+    const auto* chR = numChannels > 1 ? buffer.getReadPointer (1) : chL;
+
+    for (int i = 0; i < numSamples; i += _scopeDownsample)
+    {
+        int start1, size1, start2, size2;
+        _scopeFifo.prepareToWrite (1, start1, size1, start2, size2);
+
+        if (size1 > 0)
+        {
+            // Codifica M/S: X = Side (L−R), Y = Mid (L+R)
+            _scopeBufX[start1] = (chL[i] - chR[i]) * 0.5f;
+            _scopeBufY[start1] = (chL[i] + chR[i]) * 0.5f;
+            _scopeFifo.finishedWrite (1);
+        }
+    }
+}
+
 void CustomAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     if (getTotalNumInputChannels() > 0)
@@ -150,6 +178,7 @@ void CustomAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     RNBO::JuceAudioProcessor::processBlock (buffer, midiMessages);
 
     measurePeaks (buffer, true);
+    fillScopeFifo (buffer);
 }
 
 void CustomAudioProcessor::handleMessageEvent (const RNBO::MessageEvent& event)
@@ -181,10 +210,6 @@ void CustomAudioProcessor::handleMessageEvent (const RNBO::MessageEvent& event)
             meterLevels.delayTime.store (value, std::memory_order_relaxed);
         else if (tag == tagCorrelationValue)
             meterLevels.correlationValue.store (value, std::memory_order_relaxed);
-        else if (tag == tagScopeX)
-            meterLevels.scopeX.store (value, std::memory_order_relaxed);
-        else if (tag == tagScopeY)
-            meterLevels.scopeY.store (value, std::memory_order_relaxed);
     }
     
     RNBO::EventHandler::handleMessageEvent (event);

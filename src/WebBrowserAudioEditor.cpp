@@ -170,8 +170,32 @@ void WebBrowserAudioEditor::sendMeterLevelsToWebView()
     payload->setProperty ("delayTime", levels.delayTime.load (std::memory_order_relaxed));
     payload->setProperty ("sampleRate", _audioProcessor->getSampleRate());
     payload->setProperty ("correlationValue", levels.correlationValue.load (std::memory_order_relaxed));
-    payload->setProperty ("scopeX", levels.scopeX.load (std::memory_order_relaxed));
-    payload->setProperty ("scopeY", levels.scopeY.load (std::memory_order_relaxed));
+
+    // empy FIFO
+    {
+        auto& fifo = _audioProcessor->_scopeFifo;
+        const int numReady  = fifo.getNumReady();
+
+        if (numReady > 0)
+        {
+            const int numToRead = juce::jmin (numReady, 512);
+
+            juce::Array<juce::var> batchX, batchY;
+            batchX.ensureStorageAllocated (numToRead);
+            batchY.ensureStorageAllocated (numToRead);
+
+            int start1, size1, start2, size2;
+            fifo.prepareToRead (numToRead, start1, size1, start2, size2);
+
+            for (int i = 0; i < size1; ++i) { batchX.add (_audioProcessor->_scopeBufX[start1 + i]); batchY.add (_audioProcessor->_scopeBufY[start1 + i]); }
+            for (int i = 0; i < size2; ++i) { batchX.add (_audioProcessor->_scopeBufX[start2 + i]); batchY.add (_audioProcessor->_scopeBufY[start2 + i]); }
+
+            fifo.finishedRead (size1 + size2);
+
+            payload->setProperty ("scopeBatchX", juce::var (batchX));
+            payload->setProperty ("scopeBatchY", juce::var (batchY));
+        }
+    }
 
     _webComponent.emitEventIfBrowserIsVisible ("meterLevels", var (payload.get()));
 }

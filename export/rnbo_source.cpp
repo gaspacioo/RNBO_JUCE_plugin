@@ -89,15 +89,13 @@ rnbomatic* getTopLevelPatcher() {
 
 void cancelClockEvents()
 {
-    getEngine()->flushClockEvents(this, 879365773, false);
-    getEngine()->flushClockEvents(this, 1033938262, false);
+    getEngine()->flushClockEvents(this, 1910212691, false);
+    getEngine()->flushClockEvents(this, -105626027, false);
     getEngine()->flushClockEvents(this, 1220262738, false);
-    getEngine()->flushClockEvents(this, 2018930062, false);
-    getEngine()->flushClockEvents(this, -2121464745, false);
+    getEngine()->flushClockEvents(this, 770648402, false);
+    getEngine()->flushClockEvents(this, -1245190316, false);
     getEngine()->flushClockEvents(this, 848255507, false);
-    getEngine()->flushClockEvents(this, -1136472945, false);
-    getEngine()->flushClockEvents(this, 3091344, false);
-    getEngine()->flushClockEvents(this, 1142655633, false);
+    getEngine()->flushClockEvents(this, -368915887, false);
     getEngine()->flushClockEvents(this, -281953904, false);
 }
 
@@ -322,10 +320,6 @@ void process(
     this->snapshot_03_perform(this->signals[0], n);
     this->signalforwarder_01_perform(this->signals[3], out2, n);
     this->dspexpr_05_perform(this->signals[2], this->signals[1], this->signals[4], n);
-    this->dspexpr_20_perform(this->signals[4], this->signals[3], this->signals[1], n);
-    this->snapshot_07_perform(this->signals[1], n);
-    this->dspexpr_19_perform(this->signals[4], this->signals[3], this->signals[1], n);
-    this->snapshot_06_perform(this->signals[1], n);
     this->dspexpr_15_perform(this->signals[4], this->signals[3], this->signals[1], n);
 
     this->slide_tilde_01_perform(
@@ -344,7 +338,6 @@ void process(
         n
     );
 
-    this->snapshot_01_perform(this->signals[1], n);
     this->dspexpr_18_perform(this->signals[1], this->signals[0], this->signals[2], n);
     this->dspexpr_17_perform(this->signals[2], this->dspexpr_17_in2, this->signals[0], n);
 
@@ -358,6 +351,7 @@ void process(
 
     this->dspexpr_16_perform(this->signals[3], this->signals[2], this->signals[0], n);
     this->snapshot_05_perform(this->signals[0], n);
+    this->snapshot_01_perform(this->signals[1], n);
     this->signalforwarder_02_perform(this->signals[4], out1, n);
     this->stackprotect_perform(n);
     this->globaltransport_advance();
@@ -1107,12 +1101,12 @@ void processClockEvent(MillisecondTime time, ClockId index, bool hasValue, Param
     this->updateTime(time);
 
     switch (index) {
-    case 879365773:
+    case 1910212691:
         {
         this->snapshot_01_out_set(value);
         break;
         }
-    case 1033938262:
+    case -105626027:
         {
         this->snapshot_02_out_set(value);
         break;
@@ -1122,12 +1116,12 @@ void processClockEvent(MillisecondTime time, ClockId index, bool hasValue, Param
         this->line_01_tick_set(value);
         break;
         }
-    case 2018930062:
+    case 770648402:
         {
         this->snapshot_03_out_set(value);
         break;
         }
-    case -2121464745:
+    case -1245190316:
         {
         this->snapshot_04_out_set(value);
         break;
@@ -1137,19 +1131,9 @@ void processClockEvent(MillisecondTime time, ClockId index, bool hasValue, Param
         this->line_02_tick_set(value);
         break;
         }
-    case -1136472945:
+    case -368915887:
         {
         this->snapshot_05_out_set(value);
-        break;
-        }
-    case 3091344:
-        {
-        this->snapshot_06_out_set(value);
-        break;
-        }
-    case 1142655633:
-        {
-        this->snapshot_07_out_set(value);
         break;
         }
     case -281953904:
@@ -1208,21 +1192,13 @@ MessageTagInfo resolveTag(MessageTag tag) const {
         {
         return "delay_time";
         }
-    case TAG("scopeY"):
-        {
-        return "scopeY";
-        }
-    case TAG("scopeX"):
-        {
-        return "scopeX";
-        }
     }
 
     return "";
 }
 
 MessageIndex getNumMessages() const {
-    return 8;
+    return 6;
 }
 
 const MessageInfo& getMessageInfo(MessageIndex index) const {
@@ -1280,24 +1256,6 @@ const MessageInfo& getMessageInfo(MessageIndex index) const {
         };
 
         return r5;
-        }
-    case 6:
-        {
-        static const MessageInfo r6 = {
-            "scopeY",
-            Outport
-        };
-
-        return r6;
-        }
-    case 7:
-        {
-        static const MessageInfo r7 = {
-            "scopeX",
-            Outport
-        };
-
-        return r7;
         }
     }
 
@@ -1458,16 +1416,6 @@ void line_02_tick_set(number v) {
 void snapshot_05_out_set(number v) {
     this->snapshot_05_out = v;
     this->outport_05_input_number_set(v);
-}
-
-void snapshot_06_out_set(number v) {
-    this->snapshot_06_out = v;
-    this->outport_07_input_number_set(v);
-}
-
-void snapshot_07_out_set(number v) {
-    this->snapshot_07_out = v;
-    this->outport_08_input_number_set(v);
 }
 
 void linetilde_01_target_bang() {}
@@ -2221,14 +2169,6 @@ void outport_05_input_number_set(number v) {
     this->getEngine()->sendNumMessage(TAG("correlation_value"), TAG(""), v, this->_currentTime);
 }
 
-void outport_07_input_number_set(number v) {
-    this->getEngine()->sendNumMessage(TAG("scopeY"), TAG(""), v, this->_currentTime);
-}
-
-void outport_08_input_number_set(number v) {
-    this->getEngine()->sendNumMessage(TAG("scopeX"), TAG(""), v, this->_currentTime);
-}
-
 void delaytilde_01_perform(number delay, const SampleValue * input, SampleValue * output, Index n) {
     auto __delaytilde_01_crossfadeDelay = this->delaytilde_01_crossfadeDelay;
     auto __delaytilde_01_rampInSamples = this->delaytilde_01_rampInSamples;
@@ -2327,7 +2267,7 @@ void snapshot_02_perform(const SampleValue * input_signal, Index n) {
 
                 this->getEngine()->scheduleClockEventWithValue(
                     this,
-                    1033938262,
+                    -105626027,
                     this->sampsToMs((SampleIndex)(this->vs)) + this->_currentTime,
                     __snapshot_02_calc
                 );;
@@ -2529,7 +2469,7 @@ void snapshot_04_perform(const SampleValue * input_signal, Index n) {
 
                 this->getEngine()->scheduleClockEventWithValue(
                     this,
-                    -2121464745,
+                    -1245190316,
                     this->sampsToMs((SampleIndex)(this->vs)) + this->_currentTime,
                     __snapshot_04_calc
                 );;
@@ -2641,7 +2581,7 @@ void snapshot_03_perform(const SampleValue * input_signal, Index n) {
 
                 this->getEngine()->scheduleClockEventWithValue(
                     this,
-                    2018930062,
+                    770648402,
                     this->sampsToMs((SampleIndex)(this->vs)) + this->_currentTime,
                     __snapshot_03_calc
                 );;
@@ -2673,96 +2613,6 @@ void dspexpr_05_perform(const Sample * in1, const Sample * in2, SampleValue * ou
     for (i = 0; i < n; i++) {
         out1[(Index)i] = in1[(Index)i] * in2[(Index)i];//#map:_###_obj_###_:1
     }
-}
-
-void dspexpr_20_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
-    Index i;
-
-    for (i = 0; i < n; i++) {
-        out1[(Index)i] = in1[(Index)i] - in2[(Index)i];//#map:_###_obj_###_:1
-    }
-}
-
-void snapshot_07_perform(const SampleValue * input_signal, Index n) {
-    auto __snapshot_07_lastValue = this->snapshot_07_lastValue;
-    auto __snapshot_07_calc = this->snapshot_07_calc;
-    auto __snapshot_07_count = this->snapshot_07_count;
-    auto __snapshot_07_nextTime = this->snapshot_07_nextTime;
-    auto __snapshot_07_interval = this->snapshot_07_interval;
-    number timeInSamples = this->msToSamps(__snapshot_07_interval, this->sr);
-
-    if (__snapshot_07_interval > 0) {
-        for (Index i = 0; i < n; i++) {
-            if (__snapshot_07_nextTime <= __snapshot_07_count + (SampleIndex)(i)) {
-                {
-                    __snapshot_07_calc = input_signal[(Index)i];
-                }
-
-                this->getEngine()->scheduleClockEventWithValue(
-                    this,
-                    1142655633,
-                    this->sampsToMs((SampleIndex)(this->vs)) + this->_currentTime,
-                    __snapshot_07_calc
-                );;
-
-                __snapshot_07_calc = 0;
-                __snapshot_07_nextTime += timeInSamples;
-            }
-        }
-
-        __snapshot_07_count += this->vs;
-    }
-
-    __snapshot_07_lastValue = input_signal[(Index)(n - 1)];
-    this->snapshot_07_nextTime = __snapshot_07_nextTime;
-    this->snapshot_07_count = __snapshot_07_count;
-    this->snapshot_07_calc = __snapshot_07_calc;
-    this->snapshot_07_lastValue = __snapshot_07_lastValue;
-}
-
-void dspexpr_19_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
-    Index i;
-
-    for (i = 0; i < n; i++) {
-        out1[(Index)i] = in1[(Index)i] + in2[(Index)i];//#map:_###_obj_###_:1
-    }
-}
-
-void snapshot_06_perform(const SampleValue * input_signal, Index n) {
-    auto __snapshot_06_lastValue = this->snapshot_06_lastValue;
-    auto __snapshot_06_calc = this->snapshot_06_calc;
-    auto __snapshot_06_count = this->snapshot_06_count;
-    auto __snapshot_06_nextTime = this->snapshot_06_nextTime;
-    auto __snapshot_06_interval = this->snapshot_06_interval;
-    number timeInSamples = this->msToSamps(__snapshot_06_interval, this->sr);
-
-    if (__snapshot_06_interval > 0) {
-        for (Index i = 0; i < n; i++) {
-            if (__snapshot_06_nextTime <= __snapshot_06_count + (SampleIndex)(i)) {
-                {
-                    __snapshot_06_calc = input_signal[(Index)i];
-                }
-
-                this->getEngine()->scheduleClockEventWithValue(
-                    this,
-                    3091344,
-                    this->sampsToMs((SampleIndex)(this->vs)) + this->_currentTime,
-                    __snapshot_06_calc
-                );;
-
-                __snapshot_06_calc = 0;
-                __snapshot_06_nextTime += timeInSamples;
-            }
-        }
-
-        __snapshot_06_count += this->vs;
-    }
-
-    __snapshot_06_lastValue = input_signal[(Index)(n - 1)];
-    this->snapshot_06_nextTime = __snapshot_06_nextTime;
-    this->snapshot_06_count = __snapshot_06_count;
-    this->snapshot_06_calc = __snapshot_06_calc;
-    this->snapshot_06_lastValue = __snapshot_06_lastValue;
 }
 
 void dspexpr_15_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
@@ -2804,43 +2654,6 @@ void average_rms_tilde_01_perform(
     for (i = 0; i < n; i++) {
         out1[(Index)i] = this->safesqrt(this->average_rms_tilde_01_av_next(x[(Index)i] * x[(Index)i], 2048, 0));
     }
-}
-
-void snapshot_01_perform(const SampleValue * input_signal, Index n) {
-    auto __snapshot_01_lastValue = this->snapshot_01_lastValue;
-    auto __snapshot_01_calc = this->snapshot_01_calc;
-    auto __snapshot_01_count = this->snapshot_01_count;
-    auto __snapshot_01_nextTime = this->snapshot_01_nextTime;
-    auto __snapshot_01_interval = this->snapshot_01_interval;
-    number timeInSamples = this->msToSamps(__snapshot_01_interval, this->sr);
-
-    if (__snapshot_01_interval > 0) {
-        for (Index i = 0; i < n; i++) {
-            if (__snapshot_01_nextTime <= __snapshot_01_count + (SampleIndex)(i)) {
-                {
-                    __snapshot_01_calc = input_signal[(Index)i];
-                }
-
-                this->getEngine()->scheduleClockEventWithValue(
-                    this,
-                    879365773,
-                    this->sampsToMs((SampleIndex)(this->vs)) + this->_currentTime,
-                    __snapshot_01_calc
-                );;
-
-                __snapshot_01_calc = 0;
-                __snapshot_01_nextTime += timeInSamples;
-            }
-        }
-
-        __snapshot_01_count += this->vs;
-    }
-
-    __snapshot_01_lastValue = input_signal[(Index)(n - 1)];
-    this->snapshot_01_nextTime = __snapshot_01_nextTime;
-    this->snapshot_01_count = __snapshot_01_count;
-    this->snapshot_01_calc = __snapshot_01_calc;
-    this->snapshot_01_lastValue = __snapshot_01_lastValue;
 }
 
 void dspexpr_18_perform(const Sample * in1, const Sample * in2, SampleValue * out1, Index n) {
@@ -2902,7 +2715,7 @@ void snapshot_05_perform(const SampleValue * input_signal, Index n) {
 
                 this->getEngine()->scheduleClockEventWithValue(
                     this,
-                    -1136472945,
+                    -368915887,
                     this->sampsToMs((SampleIndex)(this->vs)) + this->_currentTime,
                     __snapshot_05_calc
                 );;
@@ -2920,6 +2733,43 @@ void snapshot_05_perform(const SampleValue * input_signal, Index n) {
     this->snapshot_05_count = __snapshot_05_count;
     this->snapshot_05_calc = __snapshot_05_calc;
     this->snapshot_05_lastValue = __snapshot_05_lastValue;
+}
+
+void snapshot_01_perform(const SampleValue * input_signal, Index n) {
+    auto __snapshot_01_lastValue = this->snapshot_01_lastValue;
+    auto __snapshot_01_calc = this->snapshot_01_calc;
+    auto __snapshot_01_count = this->snapshot_01_count;
+    auto __snapshot_01_nextTime = this->snapshot_01_nextTime;
+    auto __snapshot_01_interval = this->snapshot_01_interval;
+    number timeInSamples = this->msToSamps(__snapshot_01_interval, this->sr);
+
+    if (__snapshot_01_interval > 0) {
+        for (Index i = 0; i < n; i++) {
+            if (__snapshot_01_nextTime <= __snapshot_01_count + (SampleIndex)(i)) {
+                {
+                    __snapshot_01_calc = input_signal[(Index)i];
+                }
+
+                this->getEngine()->scheduleClockEventWithValue(
+                    this,
+                    1910212691,
+                    this->sampsToMs((SampleIndex)(this->vs)) + this->_currentTime,
+                    __snapshot_01_calc
+                );;
+
+                __snapshot_01_calc = 0;
+                __snapshot_01_nextTime += timeInSamples;
+            }
+        }
+
+        __snapshot_01_count += this->vs;
+    }
+
+    __snapshot_01_lastValue = input_signal[(Index)(n - 1)];
+    this->snapshot_01_nextTime = __snapshot_01_nextTime;
+    this->snapshot_01_count = __snapshot_01_count;
+    this->snapshot_01_calc = __snapshot_01_calc;
+    this->snapshot_01_lastValue = __snapshot_01_lastValue;
 }
 
 void signalforwarder_02_perform(const SampleValue * input, SampleValue * output, Index n) {
@@ -4037,14 +3887,6 @@ void assign_defaults()
     dspexpr_18_in1 = 0;
     dspexpr_18_in2 = 0;
     param_08_value = 20;
-    snapshot_06_interval = 5;
-    snapshot_06_out = 0;
-    dspexpr_19_in1 = 0;
-    dspexpr_19_in2 = 0;
-    snapshot_07_interval = 5;
-    snapshot_07_out = 0;
-    dspexpr_20_in1 = 0;
-    dspexpr_20_in2 = 0;
     _currentTime = 0;
     audioProcessSampleCount = 0;
     sampleOffsetIntoNextAudioBuffer = 0;
@@ -4149,14 +3991,6 @@ void assign_defaults()
     snapshot_05_lastValue = 0;
     slide_tilde_02_prev = 0;
     param_08_lastValue = 0;
-    snapshot_06_calc = 0;
-    snapshot_06_nextTime = 0;
-    snapshot_06_count = 0;
-    snapshot_06_lastValue = 0;
-    snapshot_07_calc = 0;
-    snapshot_07_nextTime = 0;
-    snapshot_07_count = 0;
-    snapshot_07_lastValue = 0;
     globaltransport_tempo = nullptr;
     globaltransport_state = nullptr;
     stackprotect_count = 0;
@@ -4286,14 +4120,6 @@ void assign_defaults()
     number dspexpr_18_in1;
     number dspexpr_18_in2;
     number param_08_value;
-    number snapshot_06_interval;
-    number snapshot_06_out;
-    number dspexpr_19_in1;
-    number dspexpr_19_in2;
-    number snapshot_07_interval;
-    number snapshot_07_out;
-    number dspexpr_20_in1;
-    number dspexpr_20_in2;
     MillisecondTime _currentTime;
     UInt64 audioProcessSampleCount;
     SampleIndex sampleOffsetIntoNextAudioBuffer;
@@ -4403,14 +4229,6 @@ void assign_defaults()
     number snapshot_05_lastValue;
     number slide_tilde_02_prev;
     number param_08_lastValue;
-    number snapshot_06_calc;
-    number snapshot_06_nextTime;
-    SampleIndex snapshot_06_count;
-    number snapshot_06_lastValue;
-    number snapshot_07_calc;
-    number snapshot_07_nextTime;
-    SampleIndex snapshot_07_count;
-    number snapshot_07_lastValue;
     signal globaltransport_tempo;
     signal globaltransport_state;
     number stackprotect_count;

@@ -198,10 +198,9 @@ body {
     background: #0d0d0d;
     border: 1px solid #222222;
     border-radius: 4px;
-    padding: 6px 8px;            /* Padding dimezzati */
-    width: 100%;
-    max-width: 200px;            /* Ridotto drasticamente da 320px */
-    margin-top: 0px;
+    padding: 6px 12px;
+    width: min(450px, 100%);
+    flex: 0 0 auto;
     box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
 }
 
@@ -235,8 +234,45 @@ body {
 
 .stats-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px;                    /* Spazio tra i blocchi dimezzato */
+    grid-template-columns: 14px repeat(4, 1fr);
+    gap: 4px;
+}
+
+.stats-row-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 0.6rem;
+    font-weight: bold;
+    color: rgba(194, 146, 68, 0.5);
+    letter-spacing: 0.05em;
+}
+
+.stats-global {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 5px;
+    padding-top: 5px;
+    border-top: 1px solid rgba(194, 146, 68, 0.2);
+}
+
+.stats-global-label {
+    font-size: 0.45rem;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    color: rgba(194, 146, 68, 0.5);
+    text-transform: uppercase;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    flex: 0 0 auto;
+}
+
+.stats-global-boxes {
+    display: flex;
+    gap: 4px;
+    flex: 1;
 }
 
 .stats-box {
@@ -346,6 +382,88 @@ body {
     border-radius: 5px;
     display: block;
     box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8);
+}
+
+.vs-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+#vectorscopeOverlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    background: transparent;
+    border-radius: 5px;
+}
+
+.vs-controls {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    z-index: 10;
+}
+
+.vs-btn {
+    width: 13px;
+    height: 13px;
+    background: rgba(15, 15, 15, 0.85);
+    border: 1px solid rgba(194, 146, 68, 0.7);
+    color: rgba(194, 146, 68, 0.9);
+    font-size: 11px;
+    font-family: monospace;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 2px;
+    user-select: none;
+}
+
+/* ==========================================================================
+   DEBUG WINDOW
+   ========================================================================== */
+.debug-window {
+    display: none;
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    width: 400px;
+    max-height: 300px;
+    background: #1e1e1e;
+    border: 2px solid #00ff00;
+    border-radius: 4px;
+    color: #00ff00;
+    font-family: monospace;
+    font-size: 11px;
+    overflow-y: auto;
+    z-index: 99999;
+    padding: 8px;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+}
+
+.debug-close-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: #00ff00;
+    color: #1e1e1e;
+    border: none;
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    border-radius: 2px;
+    font-weight: bold;
+}
+
+.debug-content {
+    margin-top: 20px;
 }
 
 /* ==========================================================================
