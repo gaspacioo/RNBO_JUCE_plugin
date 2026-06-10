@@ -116,7 +116,7 @@ WebBrowserAudioEditor::WebBrowserAudioEditor (CustomAudioProcessor* const p,
     }
 
     setResizable (true, true);
-    setResizeLimits (600, 650, 720, 900);
+    setResizeLimits (600, 650, 720, 1200);
 
     addAndMakeVisible (_webComponent);
 
@@ -125,7 +125,7 @@ WebBrowserAudioEditor::WebBrowserAudioEditor (CustomAudioProcessor* const p,
     _webComponent.goToURL (kDevServerAddress);
     //_webComponent.goToURL(WebBrowserComponent::getResourceProviderRoot());
 
-    setSize (600, 650);
+    setSize (600, 830);
 
     startTimerHz (60);
 }
@@ -194,6 +194,35 @@ void WebBrowserAudioEditor::sendMeterLevelsToWebView()
 
             payload->setProperty ("scopeBatchX", juce::var (batchX));
             payload->setProperty ("scopeBatchY", juce::var (batchY));
+        }
+    }
+
+    // Spettro: invio decimato a ~15 Hz, solo se ci sono nuovi frame FFT
+    if (++_specSendTick >= 4)
+    {
+        _specSendTick = 0;
+
+        if (_audioProcessor->_specNewData.load (std::memory_order_acquire))
+        {
+            constexpr int numBands = CustomAudioProcessor::kSpecBands;
+
+            juce::Array<juce::var> bandsL, bandsR;
+            bandsL.ensureStorageAllocated (numBands);
+            bandsR.ensureStorageAllocated (numBands);
+
+            {
+                const juce::ScopedLock lock (_audioProcessor->_specLock);
+                _audioProcessor->_specNewData.store (false, std::memory_order_relaxed);
+
+                for (int b = 0; b < numBands; ++b)
+                {
+                    bandsL.add (_audioProcessor->_specMagL[b]);
+                    bandsR.add (_audioProcessor->_specMagR[b]);
+                }
+            }
+
+            payload->setProperty ("specL", juce::var (bandsL));
+            payload->setProperty ("specR", juce::var (bandsR));
         }
     }
 

@@ -499,8 +499,8 @@ function drawVectorscope() {
     const canvas = document.getElementById('vectorscopeCanvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const w  = canvas.width;
-    const h  = canvas.height;
+    const w  = _vsW || canvas.width;
+    const h  = _vsH || canvas.height;
     const cx = w * 0.5;
     const cy = h * 0.5;
 
@@ -514,7 +514,8 @@ function drawVectorscope() {
         _vsPendingBatch = null;
 
         ctx.save();
-        ctx.shadowBlur = 5;
+        // shadowBlur è in pixel fisici, non segue la transform: va scalato a mano
+        ctx.shadowBlur = 5 * _dpr;
         ctx.shadowColor = 'rgba(194, 146, 68, 0.8)';
         ctx.strokeStyle = 'rgb(240, 195, 120)';
         ctx.lineWidth = 1.2;
@@ -541,14 +542,14 @@ function drawVectorscope() {
     if (_vsOverlayCanvas) {
         const oc   = _vsOverlayCanvas;
         const octx = oc.getContext('2d');
-        octx.clearRect(0, 0, oc.width, oc.height);
+        octx.clearRect(0, 0, w, h);
 
         if (_vsShowOverlay) {
-            drawVectorscopeOverlay(octx, oc.width, oc.height, cx, cy);
+            drawVectorscopeOverlay(octx, w, h, cx, cy);
 
             if (_vsLastX !== null) {
                 octx.save();
-                octx.shadowBlur = 8;
+                octx.shadowBlur = 8 * _dpr;
                 octx.shadowColor = 'rgba(255, 220, 100, 1)';
                 octx.fillStyle = 'rgb(255, 240, 180)';
                 octx.beginPath();
@@ -593,6 +594,388 @@ function drawVectorscopeOverlay(ctx, w, h, cx, cy) {
     ctx.stroke();
 
     ctx.restore();
+}
+
+// ===== HiDPI CANVAS & PERSISTENZA STATO UI =====
+const UI_STATE_KEY = 'simplemeter.uiState';
+
+let _dpr = 1;
+// Dimensioni logiche (CSS px) dei canvas dopo lo scaling HiDPI
+let _vsW = 0, _vsH = 0;
+let _specW = 0, _specH = 0;
+
+// Ridimensiona il backing store per il devicePixelRatio mantenendo le
+// dimensioni CSS originali: il disegno resta in coordinate logiche
+// grazie alla transform, ma il rendering è nitido su display retina
+function setupHiDPICanvas(canvas) {
+    const dpr = window.devicePixelRatio || 1;
+    _dpr = dpr;
+    const w = canvas.width;
+    const h = canvas.height;
+    canvas.style.width  = w + 'px';
+    canvas.style.height = h + 'px';
+    canvas.width  = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    canvas.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { w, h };
+}
+
+function loadUiState() {
+    try {
+        return JSON.parse(localStorage.getItem(UI_STATE_KEY)) || {};
+    } catch (e) {
+        return {};
+    }
+}
+
+function saveUiState(patch) {
+    try {
+        localStorage.setItem(UI_STATE_KEY, JSON.stringify(Object.assign(loadUiState(), patch)));
+    } catch (e) {
+        // storage non disponibile: lo stato vive solo per la sessione
+    }
+}
+
+// ===== SPECTRUM ANALYZER =====
+const SPEC_BANDS   = 96;
+const SPEC_DB_RANGES = [-60, -90, -120];  // range ciclabili dal toggle dB
+const SPEC_DB_MAX  = 0;
+const SPEC_ATTACK  = 0.55;  // lerp per frame verso il target in salita
+const SPEC_RELEASE = 0.16;  // discesa più lenta (stile ballistics analogiche)
+const SPEC_F_MIN   = 20;
+const SPEC_F_MAX   = 20000;
+
+const SPEC_PEAK_DECAY = 0.1;   // dB per frame (~6 dB/s a 60 fps)
+const SPEC_TILT_DB_OCT = 3;    // pendenza pinking: rumore rosa appare piatto
+const SPEC_TILT_PIVOT  = 1000; // Hz — frequenza a guadagno zero del tilt
+// Sotto questa soglia la banda è considerata silenzio assoluto: nessuna barra
+// né peak tick, anche se il tilt porterebbe il valore dentro il range visibile
+const SPEC_FLOOR_DB    = -96;
+
+let _specDbMin   = -90;   // minimo del range visualizzato, ciclato dal toggle dB
+
+let _specTargetL = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
+let _specTargetR = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
+let _specDrawL   = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
+let _specDrawR   = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
+let _specPeakL   = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
+let _specPeakR   = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
+let _specPeakHold = false;
+let _specTiltOn   = false;
+// Media a lungo termine: media incrementale della potenza lineare per banda
+// (mediare in potenza, non in dB, dà il giusto peso ai passaggi forti)
+let _specAvgOn    = false;
+let _specAvgL     = new Float64Array(SPEC_BANDS);
+let _specAvgR     = new Float64Array(SPEC_BANDS);
+let _specAvgCount = 0;
+let _specTiltOffsets = null;  // offset dB per banda, precalcolati al primo uso
+let _specMouse    = null;     // {x, y} in coordinate canvas, null se fuori
+let _specColors  = null;
+
+function buildSpecTiltOffsets() {
+    _specTiltOffsets = new Float32Array(SPEC_BANDS);
+    for (let b = 0; b < SPEC_BANDS; b++) {
+        const freq = SPEC_F_MIN * Math.pow(SPEC_F_MAX / SPEC_F_MIN, (b + 0.5) / SPEC_BANDS);
+        _specTiltOffsets[b] = SPEC_TILT_DB_OCT * Math.log2(freq / SPEC_TILT_PIVOT);
+    }
+}
+
+// Palette stile MiniMeters sul tema ambra: scuro → ambra → giallo brillante → quasi bianco
+function buildSpecPalette() {
+    const stops = [
+        [0.00,  40,  26,  12],
+        [0.40, 194, 146,  68],
+        [0.75, 255, 210, 110],
+        [1.00, 255, 250, 230]
+    ];
+    _specColors = new Array(101);
+    for (let i = 0; i <= 100; i++) {
+        const t = i / 100;
+        let s = 0;
+        while (s < stops.length - 2 && t > stops[s + 1][0]) s++;
+        const [t0, r0, g0, b0] = stops[s];
+        const [t1, r1, g1, b1] = stops[s + 1];
+        const f = Math.min(1, Math.max(0, (t - t0) / (t1 - t0)));
+        _specColors[i] = `rgb(${Math.round(r0 + (r1 - r0) * f)}, ${Math.round(g0 + (g1 - g0) * f)}, ${Math.round(b0 + (b1 - b0) * f)})`;
+    }
+}
+
+// Posizione verticale di una frequenza: basse in basso, alte in alto (scala log)
+function specFreqY(freq, h) {
+    return h - Math.log(freq / SPEC_F_MIN) / Math.log(SPEC_F_MAX / SPEC_F_MIN) * h;
+}
+
+function drawSpectrumGrid(ctx, w, h, midX) {
+    ctx.font         = '7px monospace';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth    = 0.5;
+
+    // Linee orizzontali di riferimento frequenza (per ottave), etichette sul bordo destro
+    ctx.strokeStyle = 'rgba(194, 146, 68, 0.12)';
+    ctx.fillStyle   = 'rgba(194, 146, 68, 0.45)';
+    ctx.textAlign   = 'right';
+    const freqMarks = [
+        [30, '30'], [63, '63'], [125, '125'], [250, '250'], [500, '500'],
+        [1000, '1k'], [2000, '2k'], [4000, '4k'], [8000, '8k'],
+        [16000, '16k']
+    ];
+    for (const [freq, lbl] of freqMarks) {
+        const y = specFreqY(freq, h);
+        ctx.beginPath();
+        ctx.moveTo(0, y); ctx.lineTo(w, y);
+        ctx.stroke();
+        // Vicino al bordo superiore l'etichetta va sotto la linea, non sopra
+        ctx.fillText(lbl, w - 2, y < 12 ? y + 6 : y - 5);
+    }
+
+    // Linee verticali dB ogni 30 dB, adattate al range corrente
+    ctx.strokeStyle = 'rgba(194, 146, 68, 0.08)';
+    const halfW = midX - 1;
+    for (let db = _specDbMin + 30; db <= -30; db += 30) {
+        const t  = (db - _specDbMin) / (SPEC_DB_MAX - _specDbMin);
+        const dx = t * halfW;
+        ctx.beginPath();
+        ctx.moveTo(midX - dx, 0); ctx.lineTo(midX - dx, h);
+        ctx.moveTo(midX + dx, 0); ctx.lineTo(midX + dx, h);
+        ctx.stroke();
+    }
+
+    // Indicatore del range corrente in basso a sinistra
+    ctx.textAlign = 'left';
+    ctx.fillText(_specDbMin + ' dB', 2, h - 6);
+
+    // Linea centrale di separazione L/R
+    ctx.strokeStyle = 'rgba(194, 146, 68, 0.25)';
+    ctx.beginPath();
+    ctx.moveTo(midX, 0); ctx.lineTo(midX, h);
+    ctx.stroke();
+}
+
+function drawSpectrum() {
+    const canvas = document.getElementById('spectrumCanvas');
+    if (!canvas) return;
+    if (!_specColors) buildSpecPalette();
+
+    const ctx  = canvas.getContext('2d');
+    const w    = _specW || canvas.width;
+    const h    = _specH || canvas.height;
+    const midX = w * 0.5;
+    const gap  = 1;                       // spazio ai lati della linea centrale
+    const halfW = midX - gap - 1;
+    const rowH = h / SPEC_BANDS;
+    const dbRange = SPEC_DB_MAX - _specDbMin;
+
+    ctx.fillStyle = '#0a0a0f';
+    ctx.fillRect(0, 0, w, h);
+    drawSpectrumGrid(ctx, w, h, midX);
+
+    // Media a lungo termine in secondo piano, sotto le barre istantanee
+    if (_specAvgOn && _specAvgCount > 0) {
+        drawSpectrumAvgSide(ctx, -1, midX, gap, halfW, h, rowH, dbRange);
+        drawSpectrumAvgSide(ctx, +1, midX, gap, halfW, h, rowH, dbRange);
+    }
+
+    for (let b = 0; b < SPEC_BANDS; b++) {
+        // Ballistics: attacco rapido, rilascio lento
+        const kL = _specTargetL[b] > _specDrawL[b] ? SPEC_ATTACK : SPEC_RELEASE;
+        const kR = _specTargetR[b] > _specDrawR[b] ? SPEC_ATTACK : SPEC_RELEASE;
+        _specDrawL[b] += (_specTargetL[b] - _specDrawL[b]) * kL;
+        _specDrawR[b] += (_specTargetR[b] - _specDrawR[b]) * kR;
+
+        // Tilt pinking: applicato solo alla visualizzazione, i valori restano in dBFS reali
+        const tilt = _specTiltOn ? _specTiltOffsets[b] : 0;
+        const tL = _specDrawL[b] <= SPEC_FLOOR_DB ? 0
+            : Math.min(1, Math.max(0, (_specDrawL[b] + tilt - _specDbMin) / dbRange));
+        const tR = _specDrawR[b] <= SPEC_FLOOR_DB ? 0
+            : Math.min(1, Math.max(0, (_specDrawR[b] + tilt - _specDbMin) / dbRange));
+
+        // Banda 0 = 20 Hz in basso, banda 95 = 20 kHz in alto.
+        // Impulsi: righe sottili con 1px di stacco tra una banda e l'altra
+        const y  = h - (b + 1) * rowH;
+        const rh = Math.max(1, rowH - 1);
+
+        // L: impulsi verso sinistra dalla linea centrale
+        if (tL > 0.003) {
+            const len = Math.max(1, tL * halfW);
+            ctx.fillStyle = _specColors[Math.round(tL * 100)];
+            ctx.fillRect(midX - gap - len, y, len, rh);
+        }
+
+        // R: impulsi specchiati verso destra
+        if (tR > 0.003) {
+            const len = Math.max(1, tR * halfW);
+            ctx.fillStyle = _specColors[Math.round(tR * 100)];
+            ctx.fillRect(midX + gap, y, len, rh);
+        }
+
+        if (_specPeakHold) {
+            // Aggiorna i massimi con decay lento e disegna il trattino di hold
+            _specPeakL[b] = Math.max(_specDrawL[b], _specPeakL[b] - SPEC_PEAK_DECAY);
+            _specPeakR[b] = Math.max(_specDrawR[b], _specPeakR[b] - SPEC_PEAK_DECAY);
+
+            const pL = _specPeakL[b] <= SPEC_FLOOR_DB ? 0
+                : Math.min(1, (_specPeakL[b] + tilt - _specDbMin) / dbRange);
+            const pR = _specPeakR[b] <= SPEC_FLOOR_DB ? 0
+                : Math.min(1, (_specPeakR[b] + tilt - _specDbMin) / dbRange);
+            ctx.fillStyle = 'rgba(255, 235, 170, 0.85)';
+            if (pL > 0.01) ctx.fillRect(midX - gap - pL * halfW, y, 1, rh);
+            if (pR > 0.01) ctx.fillRect(midX + gap + pR * halfW - 1, y, 1, rh);
+        }
+    }
+
+    if (_specMouse) drawSpectrumReadout(ctx, w, h, midX);
+
+    requestAnimationFrame(drawSpectrum);
+}
+
+// Sagoma della media a lungo termine per un lato (side: -1 = L, +1 = R)
+function drawSpectrumAvgSide(ctx, side, midX, gap, halfW, h, rowH, dbRange) {
+    const xs = new Float32Array(SPEC_BANDS);
+    const ys = new Float32Array(SPEC_BANDS);
+
+    for (let b = 0; b < SPEC_BANDS; b++) {
+        const mean = side < 0 ? _specAvgL[b] : _specAvgR[b];
+        const db   = mean > 1e-12 ? 10 * Math.log10(mean) : -Infinity;
+        const tilt = _specTiltOn ? _specTiltOffsets[b] : 0;
+        const t    = db <= SPEC_FLOOR_DB ? 0
+            : Math.min(1, Math.max(0, (db + tilt - _specDbMin) / dbRange));
+        xs[b] = midX + side * (gap + t * halfW);
+        ys[b] = h - (b + 0.5) * rowH;
+    }
+
+    // Riempimento tenue chiuso sulla linea centrale
+    ctx.beginPath();
+    ctx.moveTo(midX + side * gap, ys[0]);
+    for (let b = 0; b < SPEC_BANDS; b++) ctx.lineTo(xs[b], ys[b]);
+    ctx.lineTo(midX + side * gap, ys[SPEC_BANDS - 1]);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(194, 146, 68, 0.10)';
+    ctx.fill();
+
+    // Profilo sottile della curva
+    ctx.beginPath();
+    for (let b = 0; b < SPEC_BANDS; b++)
+        b === 0 ? ctx.moveTo(xs[b], ys[b]) : ctx.lineTo(xs[b], ys[b]);
+    ctx.strokeStyle = 'rgba(194, 146, 68, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+}
+
+const SPEC_NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+function freqToNoteName(freq) {
+    const midi = Math.round(12 * Math.log2(freq / 440) + 69);
+    if (midi < 0 || midi > 135) return '--';
+    return SPEC_NOTE_NAMES[midi % 12] + (Math.floor(midi / 12) - 1);
+}
+
+function formatSpecFreq(freq) {
+    return freq < 1000 ? Math.round(freq) + ' Hz'
+                       : (freq / 1000).toFixed(freq < 10000 ? 2 : 1) + ' kHz';
+}
+
+function drawSpectrumReadout(ctx, w, h, midX) {
+    const { x, y } = _specMouse;
+
+    // Frequenza dalla posizione verticale (scala log, basse in basso)
+    const frac = Math.min(1, Math.max(0, (h - y) / h));
+    const freq = SPEC_F_MIN * Math.pow(SPEC_F_MAX / SPEC_F_MIN, frac);
+
+    // Canale dal lato del cursore, dB dalla banda sotto il cursore
+    const band = Math.min(SPEC_BANDS - 1, Math.max(0, Math.floor(frac * SPEC_BANDS)));
+    const isLeft = x < midX;
+    const db = isLeft ? _specDrawL[band] : _specDrawR[band];
+    const dbTxt = db <= SPEC_FLOOR_DB ? '−∞' : db.toFixed(1) + ' dB';
+
+    // Linea orizzontale di tracking sul cursore
+    ctx.strokeStyle = 'rgba(255, 235, 170, 0.35)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, y); ctx.lineTo(w, y);
+    ctx.stroke();
+
+    const text = `${isLeft ? 'L' : 'R'}  ${formatSpecFreq(freq)}  ${freqToNoteName(freq)}  ${dbTxt}`;
+
+    ctx.font = 'bold 8px monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    const tw = ctx.measureText(text).width;
+
+    ctx.fillStyle = 'rgba(10, 10, 15, 0.85)';
+    ctx.fillRect(w - tw - 8, h - 14, tw + 6, 12);
+    ctx.fillStyle = 'rgb(255, 235, 170)';
+    ctx.fillText(text, w - 5, h - 4);
+}
+
+function setupSpectrumControls() {
+    const canvas = document.getElementById('spectrumCanvas');
+    if (!canvas) return;
+
+    const dims = setupHiDPICanvas(canvas);
+    _specW = dims.w;
+    _specH = dims.h;
+
+    const saved = loadUiState();
+
+    const btnPeak = document.getElementById('specPeakToggle');
+    _specPeakHold = saved.specPeak === true;
+    btnPeak.style.opacity = _specPeakHold ? '1' : '0.35';
+    btnPeak.addEventListener('click', () => {
+        _specPeakHold = !_specPeakHold;
+        btnPeak.style.opacity = _specPeakHold ? '1' : '0.35';
+        if (!_specPeakHold) {
+            _specPeakL.fill(SPEC_FLOOR_DB - 1);
+            _specPeakR.fill(SPEC_FLOOR_DB - 1);
+        }
+        saveUiState({ specPeak: _specPeakHold });
+    });
+
+    const btnTilt = document.getElementById('specTiltToggle');
+    _specTiltOn = saved.specTilt === true;
+    if (_specTiltOn && !_specTiltOffsets) buildSpecTiltOffsets();
+    btnTilt.style.opacity = _specTiltOn ? '1' : '0.35';
+    btnTilt.addEventListener('click', () => {
+        _specTiltOn = !_specTiltOn;
+        btnTilt.style.opacity = _specTiltOn ? '1' : '0.35';
+        if (_specTiltOn && !_specTiltOffsets) buildSpecTiltOffsets();
+        saveUiState({ specTilt: _specTiltOn });
+    });
+
+    const btnAvg = document.getElementById('specAvgToggle');
+    _specAvgOn = saved.specAvg === true;
+    btnAvg.style.opacity = _specAvgOn ? '1' : '0.35';
+    btnAvg.addEventListener('click', () => {
+        _specAvgOn = !_specAvgOn;
+        btnAvg.style.opacity = _specAvgOn ? '1' : '0.35';
+        if (!_specAvgOn) {
+            // Spegnere il toggle azzera l'accumulo: alla riattivazione si riparte da zero
+            _specAvgL.fill(0);
+            _specAvgR.fill(0);
+            _specAvgCount = 0;
+        }
+        saveUiState({ specAvg: _specAvgOn });
+    });
+
+    const btnRange = document.getElementById('specRangeToggle');
+    if (SPEC_DB_RANGES.includes(saved.specDbMin))
+        _specDbMin = saved.specDbMin;
+    btnRange.title = `Range dB: ${_specDbMin} → 0 (click per ciclare)`;
+    btnRange.addEventListener('click', () => {
+        const i = SPEC_DB_RANGES.indexOf(_specDbMin);
+        _specDbMin = SPEC_DB_RANGES[(i + 1) % SPEC_DB_RANGES.length];
+        btnRange.title = `Range dB: ${_specDbMin} → 0 (click per ciclare)`;
+        saveUiState({ specDbMin: _specDbMin });
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        // Coordinate logiche: il backing store è scalato per dpr, il mouse no
+        _specMouse = {
+            x: (e.clientX - rect.left) * _specW / rect.width,
+            y: (e.clientY - rect.top)  * _specH / rect.height
+        };
+    });
+    canvas.addEventListener('mouseleave', () => { _specMouse = null; });
 }
 
 // ===== CORE LOGIC: SLIDER E PARAMETRI =====
@@ -1078,13 +1461,32 @@ function wireMeters() {
             
             if (data.scopeBatchX && data.scopeBatchX.length > 0)
                 _vsPendingBatch = { bx: data.scopeBatchX, by: data.scopeBatchY };
+
+            if (data.specL && data.specL.length === SPEC_BANDS) {
+                for (let b = 0; b < SPEC_BANDS; b++) {
+                    _specTargetL[b] = data.specL[b];
+                    _specTargetR[b] = data.specR[b];
+                }
+
+                if (_specAvgOn) {
+                    _specAvgCount++;
+                    for (let b = 0; b < SPEC_BANDS; b++) {
+                        const pL = Math.pow(10, data.specL[b] / 10);
+                        const pR = Math.pow(10, data.specR[b] / 10);
+                        _specAvgL[b] += (pL - _specAvgL[b]) / _specAvgCount;
+                        _specAvgR[b] += (pR - _specAvgR[b]) / _specAvgCount;
+                    }
+                }
+            }
         });
         debugLog('✓ meterLevels event listener added', 'SUCCESS');
     } catch (e) {
         debugLog(`✗ Error adding meterLevels listener: ${e.message}`, 'ERROR');
     }
     setupVectorscopeZoom();
+    setupSpectrumControls();
     drawVectorscope();
+    drawSpectrum();
 }
 
 function changeVsZoom(direction) {
@@ -1094,18 +1496,33 @@ function changeVsZoom(direction) {
 
     _vsLastX = null;
     _vsLastY = null;
+    saveUiState({ vsZoom: _vsZoom });
 }
 
 function setupVectorscopeZoom() {
     _vsOverlayCanvas = document.getElementById('vectorscopeOverlay');
 
+    const vsCanvas = document.getElementById('vectorscopeCanvas');
+    const dims = setupHiDPICanvas(vsCanvas);
+    _vsW = dims.w;
+    _vsH = dims.h;
+    setupHiDPICanvas(_vsOverlayCanvas);
+
+    const saved = loadUiState();
+    if (typeof saved.vsZoom === 'number')
+        _vsZoom = Math.max(VS_ZOOM_MIN, Math.min(VS_ZOOM_MAX, saved.vsZoom));
+    if (saved.vsOverlay === false)
+        _vsShowOverlay = false;
+
     document.getElementById('vsZoomIn').addEventListener('click', () => changeVsZoom(1));
     document.getElementById('vsZoomOut').addEventListener('click', () => changeVsZoom(-1));
 
     const btnOverlay = document.getElementById('vsOverlayToggle');
+    btnOverlay.style.opacity = _vsShowOverlay ? '1' : '0.35';
     btnOverlay.addEventListener('click', () => {
         _vsShowOverlay = !_vsShowOverlay;
         btnOverlay.style.opacity = _vsShowOverlay ? '1' : '0.35';
+        saveUiState({ vsOverlay: _vsShowOverlay });
     });
 }
 

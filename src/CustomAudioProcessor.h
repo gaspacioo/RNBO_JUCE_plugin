@@ -4,6 +4,7 @@
 #include "RNBO_Utils.h"
 #include "RNBO_JuceAudioProcessor.h"
 #include "RNBO_BinaryData.h"
+#include <juce_dsp/juce_dsp.h>
 #include <atomic>
 #include <json/json.hpp>
 
@@ -49,12 +50,52 @@ public:
     float _scopeBufX[kScopeBufferSize] = {};
     float _scopeBufY[kScopeBufferSize] = {};
 
+    // Spettro multi-risoluzione, bande log-spaced 20 Hz – 20 kHz:
+    // FFT corta (2048, hop 50%) per medie/alte, FFT lunga (8192, hop 25%)
+    // per le bande sotto kSpecLowCrossHz dove servono più bin per ottava
+    static constexpr int kFftOrder    = 11;
+    static constexpr int kFftSize     = 1 << kFftOrder;
+    static constexpr int kFftHop      = kFftSize / 2;
+    static constexpr int kFftLowOrder = 13;
+    static constexpr int kFftLowSize  = 1 << kFftLowOrder;
+    static constexpr int kFftLowHop   = kFftLowSize / 4;
+    static constexpr int kSpecBands   = 96;
+    static constexpr float kSpecLowCrossHz = 300.0f;
+
+    // Magnitudini in dB per banda, protette da _specLock (il timer della UI legge da qui)
+    float _specMagL[kSpecBands] = {};
+    float _specMagR[kSpecBands] = {};
+    std::atomic<bool>     _specNewData { false };
+    juce::CriticalSection _specLock;
+
 private:
     void measurePeaks (const juce::AudioBuffer<float>& buffer, bool isOutput);
     void fillScopeFifo (const juce::AudioBuffer<float>& buffer);
+    void feedSpectrum (const juce::AudioBuffer<float>& buffer);
+    void computeSpectrumFrame (bool lowBands);
 
     float _peakDecayDbPerBlock = 0.05f;
     int   _scopeDownsample     = 4;
+
+    juce::dsp::FFT _fft    { kFftOrder };
+    juce::dsp::FFT _fftLow { kFftLowOrder };
+    float _hannWindow[kFftSize]       = {};
+    float _hannWindowLow[kFftLowSize] = {};
+
+    // Ring buffer condiviso, dimensionato sulla FFT lunga:
+    // la FFT corta legge solo gli ultimi kFftSize campioni
+    float _fftRingL[kFftLowSize] = {};
+    float _fftRingR[kFftLowSize] = {};
+    int   _fftRingPos    = 0;
+    int   _fftHopCount   = 0;
+    int   _fftLowHopCount = 0;
+    float _fftWorkBuf[kFftLowSize * 2] = {};
+
+    // Range di bin FFT (inclusivo) coperto da ogni banda di display,
+    // riferito alla FFT lunga se _bandUseLow[b] è true
+    int  _bandLo[kSpecBands]     = {};
+    int  _bandHi[kSpecBands]     = {};
+    bool _bandUseLow[kSpecBands] = {};
 
     static constexpr RNBO::MessageTag tagInRmsL  = RNBO::TAG ("in_rms_L");
     static constexpr RNBO::MessageTag tagInRmsR  = RNBO::TAG ("in_rms_R");

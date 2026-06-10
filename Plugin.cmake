@@ -118,6 +118,7 @@ endif()
 target_link_libraries(RNBOAudioPlugin
   PRIVATE
   juce::juce_audio_utils
+  juce::juce_dsp
   juce::juce_gui_extra
   PUBLIC
   juce::juce_recommended_config_flags

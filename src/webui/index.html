@@ -164,22 +164,39 @@
     
     
     <div class="meter-section">
-      <div class="control-group">
-        <label>Phase Correlation</label>
-        <div id="correlationContainer">
-          <div id="correlationBar"></div>
+      <div class="meter-col">
+        <div class="control-group">
+          <label>Spectrum</label>
+          <div class="spec-wrapper">
+            <canvas id="spectrumCanvas" width="230" height="280"></canvas>
+            <div class="spec-controls">
+              <button id="specPeakToggle" class="vs-btn" title="Toggle peak hold">P</button>
+              <button id="specTiltToggle" class="vs-btn" title="Toggle pinking compensation (+3 dB/oct)">T</button>
+              <button id="specAvgToggle" class="vs-btn" title="Toggle long-term average">A</button>
+              <button id="specRangeToggle" class="vs-btn" title="Cycle dB range (-60 / -90 / -120)">dB</button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="control-group">
-        <label>Vectorscope</label>
-        <div class="vs-wrapper">
-          <canvas id="vectorscopeCanvas" width="150" height="150"></canvas>
-          <canvas id="vectorscopeOverlay" width="150" height="150"></canvas>
-          <div class="vs-controls">
-            <button id="vsZoomIn"        class="vs-btn" title="Zoom in">+</button>
-            <button id="vsZoomOut"       class="vs-btn" title="Zoom out">−</button>
-            <button id="vsOverlayToggle" class="vs-btn" title="Toggle reference overlay">⊙</button>
+      <div class="meter-col">
+        <div class="control-group">
+          <label>Phase Correlation</label>
+          <div id="correlationContainer">
+            <div id="correlationBar"></div>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label>Vectorscope</label>
+          <div class="vs-wrapper">
+            <canvas id="vectorscopeCanvas" width="150" height="150"></canvas>
+            <canvas id="vectorscopeOverlay" width="150" height="150"></canvas>
+            <div class="vs-controls">
+              <button id="vsZoomIn"        class="vs-btn" title="Zoom in">+</button>
+              <button id="vsZoomOut"       class="vs-btn" title="Zoom out">−</button>
+              <button id="vsOverlayToggle" class="vs-btn" title="Toggle reference overlay">⊙</button>
+            </div>
           </div>
         </div>
       </div>

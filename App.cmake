@@ -103,6 +103,7 @@ target_link_libraries(RNBOApp
   juce::juce_audio_formats
   juce::juce_audio_processors
   juce::juce_audio_utils
+  juce::juce_dsp
   juce::juce_data_structures
   PUBLIC
   juce::juce_recommended_config_flags

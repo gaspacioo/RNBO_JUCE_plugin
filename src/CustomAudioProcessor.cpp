@@ -106,6 +106,48 @@ void CustomAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     meterLevels.inPeakR.store (kSilenceDb, std::memory_order_relaxed);
     meterLevels.outPeakL.store (kSilenceDb, std::memory_order_relaxed);
     meterLevels.outPeakR.store (kSilenceDb, std::memory_order_relaxed);
+
+    // --- Spettro: finestre di Hann + mappatura bande logaritmiche ---
+    for (int i = 0; i < kFftSize; ++i)
+        _hannWindow[i] = 0.5f * (1.0f - std::cos (2.0f * juce::MathConstants<float>::pi
+                                                       * (float) i / (float) (kFftSize - 1)));
+
+    for (int i = 0; i < kFftLowSize; ++i)
+        _hannWindowLow[i] = 0.5f * (1.0f - std::cos (2.0f * juce::MathConstants<float>::pi
+                                                          * (float) i / (float) (kFftLowSize - 1)));
+
+    const float nyquist = sr * 0.5f;
+    const float fMin    = 20.0f;
+    const float fMax    = std::min (20000.0f, nyquist);
+
+    for (int b = 0; b < kSpecBands; ++b)
+    {
+        // Bordi di banda log-spaced: banda b copre [edge(b), edge(b+1))
+        const float fLo = fMin * std::pow (fMax / fMin, (float) b       / (float) kSpecBands);
+        const float fHi = fMin * std::pow (fMax / fMin, (float) (b + 1) / (float) kSpecBands);
+
+        // Sotto il crossover la banda usa la FFT lunga (più bin per ottava)
+        const bool useLow = fHi < kSpecLowCrossHz;
+        const int  halfN  = (useLow ? kFftLowSize : kFftSize) / 2;
+
+        int lo = (int) std::floor (fLo / nyquist * (float) halfN);
+        int hi = (int) std::ceil  (fHi / nyquist * (float) halfN) - 1;
+
+        lo = juce::jlimit (1, halfN, lo);
+        hi = juce::jlimit (lo, halfN, hi);
+
+        _bandLo[b]     = lo;
+        _bandHi[b]     = hi;
+        _bandUseLow[b] = useLow;
+    }
+
+    _fftRingPos     = 0;
+    _fftHopCount    = 0;
+    _fftLowHopCount = 0;
+    std::fill (std::begin (_fftRingL), std::end (_fftRingL), 0.0f);
+    std::fill (std::begin (_fftRingR), std::end (_fftRingR), 0.0f);
+    std::fill (std::begin (_specMagL), std::end (_specMagL), kSilenceDb);
+    std::fill (std::begin (_specMagR), std::end (_specMagR), kSilenceDb);
 }
 
 void CustomAudioProcessor::measurePeaks (const juce::AudioBuffer<float>& buffer, bool isOutput)
@@ -170,6 +212,107 @@ void CustomAudioProcessor::fillScopeFifo (const juce::AudioBuffer<float>& buffer
     }
 }
 
+void CustomAudioProcessor::feedSpectrum (const juce::AudioBuffer<float>& buffer)
+{
+    const int numSamples  = buffer.getNumSamples();
+    const int numChannels = buffer.getNumChannels();
+
+    if (numChannels <= 0 || numSamples <= 0)
+        return;
+
+    const auto* chL = buffer.getReadPointer (0);
+    const auto* chR = numChannels > 1 ? buffer.getReadPointer (1) : chL;
+
+    for (int i = 0; i < numSamples; ++i)
+    {
+        _fftRingL[_fftRingPos] = chL[i];
+        _fftRingR[_fftRingPos] = chR[i];
+        _fftRingPos = (_fftRingPos + 1) & (kFftLowSize - 1);
+
+        if (++_fftHopCount >= kFftHop)
+        {
+            _fftHopCount = 0;
+            computeSpectrumFrame (false);
+        }
+
+        if (++_fftLowHopCount >= kFftLowHop)
+        {
+            _fftLowHopCount = 0;
+            computeSpectrumFrame (true);
+        }
+    }
+}
+
+void CustomAudioProcessor::computeSpectrumFrame (bool lowBands)
+{
+    float newMagL[kSpecBands];
+    float newMagR[kSpecBands];
+
+    auto&       fft     = lowBands ? _fftLow        : _fft;
+    const auto* window  = lowBands ? _hannWindowLow : _hannWindow;
+    const int   fftLen  = lowBands ? kFftLowSize    : kFftSize;
+
+    // Fattore di normalizzazione: una sinusoide full-scale arriva a ~0 dB
+    // (1/N per la FFT, x2 per lo spettro single-sided, x2 per il guadagno coerente di Hann)
+    const float magScale = 4.0f / (float) fftLen;
+
+    // Offset per leggere gli ultimi fftLen campioni che terminano alla posizione di scrittura
+    const int ringOffset = _fftRingPos + kFftLowSize - fftLen;
+
+    const float* rings[2]   = { _fftRingL, _fftRingR };
+    float*       results[2] = { newMagL,   newMagR   };
+
+    for (int ch = 0; ch < 2; ++ch)
+    {
+        // Srotola il ring buffer in ordine temporale applicando la finestra
+        for (int k = 0; k < fftLen; ++k)
+            _fftWorkBuf[k] = rings[ch][(ringOffset + k) & (kFftLowSize - 1)] * window[k];
+
+        std::fill (_fftWorkBuf + fftLen, _fftWorkBuf + fftLen * 2, 0.0f);
+        fft.performRealOnlyForwardTransform (_fftWorkBuf, true);
+
+        for (int b = 0; b < kSpecBands; ++b)
+        {
+            if (_bandUseLow[b] != lowBands)
+                continue;
+
+            // Picco di magnitudine sui bin coperti dalla banda
+            float maxMagSq = 0.0f;
+
+            for (int bin = _bandLo[b]; bin <= _bandHi[b]; ++bin)
+            {
+                const float re = _fftWorkBuf[bin * 2];
+                const float im = _fftWorkBuf[bin * 2 + 1];
+                maxMagSq = std::max (maxMagSq, re * re + im * im);
+            }
+
+            const float mag = std::sqrt (maxMagSq) * magScale;
+            results[ch][b]  = mag > 1e-6f ? 20.0f * std::log10 (mag) : kSilenceDb;
+        }
+    }
+
+    // Try-lock: se il timer della UI sta leggendo, salta il frame senza bloccare l'audio thread
+    const juce::GenericScopedTryLock<juce::CriticalSection> lock (_specLock);
+
+    if (lock.isLocked())
+    {
+        // EMA: la FFT lunga produce frame a cadenza dimezzata, alpha ridotto
+        // per mantenere una costante di tempo simile alle altre bande
+        const float alpha = lowBands ? 0.6f : 0.7f;
+
+        for (int b = 0; b < kSpecBands; ++b)
+        {
+            if (_bandUseLow[b] != lowBands)
+                continue;
+
+            _specMagL[b] = alpha * _specMagL[b] + (1.0f - alpha) * newMagL[b];
+            _specMagR[b] = alpha * _specMagR[b] + (1.0f - alpha) * newMagR[b];
+        }
+
+        _specNewData.store (true, std::memory_order_release);
+    }
+}
+
 void CustomAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     if (getTotalNumInputChannels() > 0)
@@ -179,6 +322,7 @@ void CustomAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 
     measurePeaks (buffer, true);
     fillScopeFifo (buffer);
+    feedSpectrum (buffer);
 }
 
 void CustomAudioProcessor::handleMessageEvent (const RNBO::MessageEvent& event)

@@ -28,6 +28,8 @@ private:
     CustomAudioProcessor* _audioProcessor;
     RNBO::CoreObject&     _rnboObject;
 
+    int _specSendTick = 0;   // invia lo spettro ogni 4 tick del timer (~15 Hz)
+
     WebSliderRelay _gainRelay { "gain" };
     WebSliderRelay _tempRelay { "temperature" };
     WebSliderRelay _distRelay { "distance" };
