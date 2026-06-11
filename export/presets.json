@@ -8,6 +8,12 @@
       "gain": {
         "value": 0
       },
+      "l_gain": {
+        "value": 0
+      },
+      "l_mute": {
+        "value": 0
+      },
       "mid_gain": {
         "value": 0
       },
@@ -15,6 +21,12 @@
         "value": 0
       },
       "phase_inv": {
+        "value": 0
+      },
+      "r_gain": {
+        "value": 0
+      },
+      "r_mute": {
         "value": 0
       },
       "side_gain": {

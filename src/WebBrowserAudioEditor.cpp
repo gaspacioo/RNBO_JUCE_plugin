@@ -99,8 +99,10 @@ WebBrowserAudioEditor::WebBrowserAudioEditor (CustomAudioProcessor* const p,
             findParameter (p, "temperature"), _tempRelay, nullptr);
         _distAttachment = std::make_unique<WebSliderParameterAttachment> (
             findParameter (p, "distance"), _distRelay, nullptr);
+
         _phaseInvAttachment = std::make_unique<WebToggleButtonParameterAttachment> (
             findParameter (p, "phase_inv"), _phaseInvRelay, nullptr);
+
         _midGainAttachment = std::make_unique<WebSliderParameterAttachment> (
             findParameter (p, "mid_gain"), _midGainRelay, nullptr);
         _sideGainAttachment = std::make_unique<WebSliderParameterAttachment> (
@@ -109,6 +111,15 @@ WebBrowserAudioEditor::WebBrowserAudioEditor (CustomAudioProcessor* const p,
             findParameter (p, "mid_mute"), _midMuteRelay, nullptr);
         _sideMuteAttachment = std::make_unique<WebToggleButtonParameterAttachment> (
             findParameter (p, "side_mute"), _sideMuteRelay, nullptr);
+
+        _lGainAttachment = std::make_unique<WebSliderParameterAttachment> (
+            findParameter (p, "l_gain"), _lGainRelay, nullptr);
+        _rGainAttachment = std::make_unique<WebSliderParameterAttachment> (
+            findParameter (p, "r_gain"), _rGainRelay, nullptr);
+        _lMuteAttachment = std::make_unique<WebToggleButtonParameterAttachment> (
+            findParameter (p, "l_mute"), _lMuteRelay, nullptr);
+        _rMuteAttachment = std::make_unique<WebToggleButtonParameterAttachment> (
+            findParameter (p, "r_mute"), _rMuteRelay, nullptr);
     }
     catch (const std::exception& e)
     {

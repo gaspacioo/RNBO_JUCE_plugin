@@ -36,8 +36,12 @@ private:
     WebToggleButtonRelay _phaseInvRelay { "phase_inv" };
     WebSliderRelay _midGainRelay { "mid_gain" };
     WebSliderRelay _sideGainRelay { "side_gain" };
-    WebToggleButtonRelay _midMuteRelay { "mid_mute" };
+    WebToggleButtonRelay _midMuteRelay  { "mid_mute" };
     WebToggleButtonRelay _sideMuteRelay { "side_mute" };
+    WebSliderRelay       _lGainRelay    { "l_gain" };
+    WebSliderRelay       _rGainRelay    { "r_gain" };
+    WebToggleButtonRelay _lMuteRelay    { "l_mute" };
+    WebToggleButtonRelay _rMuteRelay    { "r_mute" };
 
     struct SinglePageBrowser : WebBrowserComponent
     {
@@ -78,6 +82,10 @@ private:
             .withOptionsFrom (_sideGainRelay)
             .withOptionsFrom (_midMuteRelay)
             .withOptionsFrom (_sideMuteRelay)
+            .withOptionsFrom (_lGainRelay)
+            .withOptionsFrom (_rGainRelay)
+            .withOptionsFrom (_lMuteRelay)
+            .withOptionsFrom (_rMuteRelay)
             .withKeepPageLoadedWhenBrowserIsHidden()
             .withResourceProvider ([this] (const auto& url) { return getResource (url); })
     };
@@ -90,6 +98,10 @@ private:
     std::unique_ptr<WebSliderParameterAttachment> _sideGainAttachment;
     std::unique_ptr<WebToggleButtonParameterAttachment> _midMuteAttachment;
     std::unique_ptr<WebToggleButtonParameterAttachment> _sideMuteAttachment;
+    std::unique_ptr<WebSliderParameterAttachment>       _lGainAttachment;
+    std::unique_ptr<WebSliderParameterAttachment>       _rGainAttachment;
+    std::unique_ptr<WebToggleButtonParameterAttachment> _lMuteAttachment;
+    std::unique_ptr<WebToggleButtonParameterAttachment> _rMuteAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (WebBrowserAudioEditor)
 };

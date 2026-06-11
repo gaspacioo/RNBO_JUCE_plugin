@@ -62,10 +62,21 @@ body {
    ========================================================================== */
 .meters {
     display: flex;
-    align-items: flex-start;
+    align-items: stretch;
     justify-content: center;
-    gap: 46px;
+    gap: 16px;
     flex: 0 0 auto;
+    width: min(450px, 100%);
+}
+
+/* Colonna centrale: slider sopra, statistiche sotto, tra i due meter */
+.center-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .meter {
@@ -73,15 +84,15 @@ body {
     flex-direction: column;
     align-items: center;
     gap: 6px;
-    width: 56px;
-    flex: 0 0 56px;
+    width: 80px;
+    flex: 0 0 80px;
 }
 
 .meter-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    width: 56px;
+    width: 80px;
     height: 12px;
     flex: 0 0 12px;
 }
@@ -96,13 +107,13 @@ body {
 
 .meter-track {
     display: flex;
-    align-items: flex-start;
+    align-items: stretch;
     justify-content: center;
     gap: 4px;
     padding: 5px;
-    width: 56px;
-    height: 152px;
-    flex: 0 0 152px;
+    width: 80px;
+    flex: 1 1 auto;     /* si allunga su tutta l'altezza della riga */
+    min-height: 152px;
     background: #252525;
     border: 1px solid #3a3a3a;
     border-radius: 3px;
@@ -120,8 +131,8 @@ body {
 .meter-bar {
     position: relative;
     width: 20px;
-    height: 112px;
-    flex: 0 0 112px;
+    flex: 1 1 auto;     /* riempie l'altezza disponibile della track */
+    min-height: 112px;
     background: rgba(0, 0, 0, 0.35);
     border-radius: 2px;
     border: 1px solid #333;
@@ -134,6 +145,29 @@ body {
     width: 100%;
     height: 0%;
     background: linear-gradient(to top, #27ae60 0%, #f1c40f 70%, #e74c3c 100%);
+}
+
+/* Scala dBFS tra le due barre (popolata via JS) */
+.meter-scale {
+    position: relative;
+    width: 18px;
+    flex: 0 0 18px;
+    align-self: stretch;
+    margin-bottom: 24px;   /* allinea la scala alla sola zona barre (sotto ci sono i valori) */
+}
+
+.meter-scale span {
+    position: absolute;
+    left: 0;
+    right: 0;
+    transform: translateY(50%);
+    text-align: center;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 0.4rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    color: #666666;
+    pointer-events: none;
 }
 
 .meter-peak {
@@ -198,9 +232,9 @@ body {
     background: #0d0d0d;
     border: 1px solid #222222;
     border-radius: 4px;
-    padding: 6px 12px;
-    width: min(450px, 100%);
-    flex: 0 0 auto;
+    padding: 4px 8px;
+    width: 100%;          /* riempie la colonna centrale tra i due meter */
+    flex: 1 1 auto;
     box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
 }
 
@@ -235,7 +269,7 @@ body {
 .stats-grid {
     display: grid;
     grid-template-columns: 14px repeat(4, 1fr);
-    gap: 4px;
+    gap: 3px;
 }
 
 .stats-row-label {
@@ -252,9 +286,9 @@ body {
 .stats-global {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-top: 5px;
-    padding-top: 5px;
+    gap: 6px;
+    margin-top: 3px;
+    padding-top: 3px;
     border-top: 1px solid rgba(194, 146, 68, 0.2);
 }
 
@@ -275,14 +309,20 @@ body {
     flex: 1;
 }
 
+/* Larghezza equamente ripartita e indipendente dal contenuto */
+.stats-global-boxes .stats-box {
+    flex: 1 1 0;
+}
+
 .stats-box {
     background: #121212;
     border: 1px solid #1a1a1a;
     border-radius: 3px;
-    padding: 4px 6px;            /* Padding interno al box più stretto */
+    padding: 3px 5px;            /* Padding interno al box più stretto */
     display: flex;
     flex-direction: column;
     gap: 1px;
+    min-width: 0;                /* il testo non allarga la cella della grid */
 }
 
 .border-top-accent {
@@ -294,13 +334,26 @@ body {
     color: #555555;
     letter-spacing: 0.05em;
     font-weight: bold;
+    /* Altezza fissa su una riga: il contenuto non altera il layout */
+    line-height: 8px;
+    height: 8px;
+    flex: 0 0 8px;
+    white-space: nowrap;
+    overflow: hidden;
 }
 
 .stats-value {
     font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-    font-size: 0.65rem;          /* Numeri ridimensionati */
+    font-size: 0.55rem;          /* Numeri ridimensionati */
     color: rgb(194, 146, 68);
     font-weight: 500;
+    /* Dimensioni stabili al variare dei valori (−∞ ↔ -12.3 dB) */
+    font-variant-numeric: tabular-nums;
+    line-height: 11px;
+    height: 11px;
+    flex: 0 0 11px;
+    white-space: nowrap;
+    overflow: hidden;
 }
 
 /* ==========================================================================
@@ -372,53 +425,59 @@ body {
 }
 
 /* ==========================================================================
-   CORRELATION METER
+   VECTORSCOPE METER BLOCK (unificato)
    ========================================================================== */
-#correlationContainer {
-    position: relative;
-    width: 150px; 
-    height: 12px;
+.vs-meter-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
     background: #0f0f0f;
     border: 1px solid #3a3a3a;
-    border-radius: 3px;
-    overflow: hidden;
+    border-radius: 4px;
+    padding: 8px;
+    width: 166px;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8);
 }
 
-#correlationBar {
-    position: absolute;
-    height: 100%;
-    top: 0;
-    border-radius: 1px;
-    
-    /* Le transizioni interpongono i valori tra uno scatto e l'altro */
-    transition: left 0.05s linear, width 0.05s linear, background-color 0.1s ease-out;
-    
-    /* will-change avvisa il browser di accelerare tramite GPU queste proprietà */
-    will-change: left, width, background-color; 
+/* ==========================================================================
+   L/R ENERGY BALANCE METER
+   ========================================================================== */
+/* Strip sopra al vectorscope: indicatore che scorre verso il canale dominante */
+.balance-group,
+.correlation-group {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    width: 150px;
 }
 
-/* Linea centrale dello zero */
-#correlationContainer::after {
-    content: '';
-    position: absolute;
-    left: 50%;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: rgba(255, 255, 255, 0.6);
-    transform: translateX(-50%);
-    z-index: 2;
+.bal-label,
+.corr-label {
+    flex: 0 0 12px;
+    text-align: center;
+    font-size: 0.55rem;
+    font-weight: 600;
+    color: #888888;
+    line-height: 1;
+}
+
+#balanceCanvas,
+#correlationCanvas {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    height: 10px;
 }
 
 /* ==========================================================================
    VECTORSCOPE
    ========================================================================== */
 #vectorscopeCanvas {
-    background-color: #0f0f0f;
-    border: 1px solid #3a3a3a;
-    border-radius: 5px;
+    background-color: transparent;
+    border: none;
+    border-radius: 0;
     display: block;
-    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8);
 }
 
 .vs-wrapper {
@@ -510,7 +569,7 @@ body {
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    gap: 8px;
+    gap: 2px;
     flex: 0 0 auto;
 }
 
@@ -863,6 +922,47 @@ body {
     outline: none;
     border-color: rgb(194, 146, 68);
     box-shadow: 0 0 6px rgba(194, 146, 68, 0.2);
+}
+
+.lr-mode-btn {
+    width: 18px;
+    height: 18px;
+    margin: 0 auto;
+    background: #0f0f0f;
+    border: 1px solid #333333;
+    border-radius: 3px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.5rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: #555555;
+    flex: 0 0 28px;
+    align-self: center;
+    transition: all 0.15s ease;
+}
+
+.lr-mode-btn:hover {
+    background: #131313;
+    border-color: rgb(194, 146, 68);
+}
+
+.lr-mode-btn:active {
+    background: #0a0a0a;
+}
+
+.lr-mode-btn.active {
+    color: rgb(194, 146, 68);
+    border-color: rgba(194, 146, 68, 0.6);
+}
+
+.lr-mode-btn:focus {
+    outline: none;
+    border-color: rgb(194, 146, 68);
 }
 
 /* ==========================================================================

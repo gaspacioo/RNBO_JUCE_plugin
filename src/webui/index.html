@@ -31,6 +31,7 @@
             <span id="inputRmsL" class="db-rms">−∞</span>
             <span id="inputPeakValL" class="db-peak">−∞</span>
           </div>
+          <div class="meter-scale" aria-hidden="true"></div>
           <div class="meter-ch">
             <div class="meter-bar">
               <div id="inputFillR" class="meter-fill"></div>
@@ -42,6 +43,7 @@
         </div>
       </div>
 
+      <div class="center-col">
       <div class="volume-section">
         <div class="volume">
           <button id="midMuteBtn" class="mute-toggle" aria-label="Mute Mid">
@@ -52,6 +54,8 @@
           </div>
           <span id="midGainValue">0.0 dB</span>
         </div>
+
+        <button id="lrModeToggle" class="lr-mode-btn" title="Alterna M/S ↔ L/R">M/S</button>
 
         <div class="volume">
           <button id="sideMuteBtn" class="mute-toggle" aria-label="Mute Side">
@@ -77,6 +81,65 @@
         </button>
       </div>
 
+      <div class="stats-panel">
+        <div class="stats-header">
+          <span>OUTPUT STATISTICS</span>
+          <button id="resetStatsBtn" class="reset-btn">RESET</button>
+        </div>
+        <div class="stats-grid">
+          <div class="stats-row-label">L</div>
+          <div class="stats-box">
+            <div class="stats-label">MAX PEAK</div>
+            <div id="maxOutPeakL" class="stats-value">−∞</div>
+          </div>
+          <div class="stats-box">
+            <div class="stats-label">MAX RMS</div>
+            <div id="maxOutRmsL" class="stats-value">−∞</div>
+          </div>
+          <div class="stats-box">
+            <div class="stats-label">CREST F.</div>
+            <div id="crestFactorL" class="stats-value">0.0 dB</div>
+          </div>
+          <div class="stats-box">
+            <div class="stats-label">Δ GAIN</div>
+            <div id="deltaGainL" class="stats-value">0.0 dB</div>
+          </div>
+
+          <div class="stats-row-label">R</div>
+          <div class="stats-box">
+            <div class="stats-label">MAX PEAK</div>
+            <div id="maxOutPeakR" class="stats-value">−∞</div>
+          </div>
+          <div class="stats-box">
+            <div class="stats-label">MAX RMS</div>
+            <div id="maxOutRmsR" class="stats-value">−∞</div>
+          </div>
+          <div class="stats-box">
+            <div class="stats-label">CREST F.</div>
+            <div id="crestFactorR" class="stats-value">0.0 dB</div>
+          </div>
+          <div class="stats-box">
+            <div class="stats-label">Δ GAIN</div>
+            <div id="deltaGainR" class="stats-value">0.0 dB</div>
+          </div>
+        </div>
+
+        <div class="stats-global">
+          <span class="stats-global-label">GLOBAL</span>
+          <div class="stats-global-boxes">
+            <div class="stats-box">
+              <div class="stats-label">AVG PEAK</div>
+              <div id="avgOutPeak" class="stats-value">−∞</div>
+            </div>
+            <div class="stats-box">
+              <div class="stats-label">AVG RMS</div>
+              <div id="avgOutRms" class="stats-value">−∞</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+
       <div class="meter">
         <div class="meter-head">
           <span class="meter-label">Out</span>
@@ -91,6 +154,7 @@
             <span id="outputRmsL" class="db-rms">−∞</span>
             <span id="outputPeakValL" class="db-peak">−∞</span>
           </div>
+          <div class="meter-scale" aria-hidden="true"></div>
           <div class="meter-ch">
             <div class="meter-bar">
               <div id="outputFillR" class="meter-fill"></div>
@@ -103,70 +167,9 @@
       </div>
     </div>
 
-    <div class="stats-panel">
-      <div class="stats-header">
-        <span>OUTPUT STATISTICS</span>
-        <button id="resetStatsBtn" class="reset-btn">RESET</button>
-      </div>
-      <div class="stats-grid">
-        <div class="stats-row-label">L</div>
-        <div class="stats-box">
-          <div class="stats-label">MAX PEAK</div>
-          <div id="maxOutPeakL" class="stats-value">−∞</div>
-        </div>
-        <div class="stats-box">
-          <div class="stats-label">MAX RMS</div>
-          <div id="maxOutRmsL" class="stats-value">−∞</div>
-        </div>
-        <div class="stats-box">
-          <div class="stats-label">CREST FACTOR</div>
-          <div id="crestFactorL" class="stats-value">0.0 dB</div>
-        </div>
-        <div class="stats-box">
-          <div class="stats-label">DELTA GAIN</div>
-          <div id="deltaGainL" class="stats-value">0.0 dB</div>
-        </div>
-
-        <div class="stats-row-label">R</div>
-        <div class="stats-box">
-          <div class="stats-label">MAX PEAK</div>
-          <div id="maxOutPeakR" class="stats-value">−∞</div>
-        </div>
-        <div class="stats-box">
-          <div class="stats-label">MAX RMS</div>
-          <div id="maxOutRmsR" class="stats-value">−∞</div>
-        </div>
-        <div class="stats-box">
-          <div class="stats-label">CREST FACTOR</div>
-          <div id="crestFactorR" class="stats-value">0.0 dB</div>
-        </div>
-        <div class="stats-box">
-          <div class="stats-label">DELTA GAIN</div>
-          <div id="deltaGainR" class="stats-value">0.0 dB</div>
-        </div>
-      </div>
-
-      <div class="stats-global">
-        <span class="stats-global-label">GLOBAL</span>
-        <div class="stats-global-boxes">
-          <div class="stats-box">
-            <div class="stats-label">AVG PEAK</div>
-            <div id="avgOutPeak" class="stats-value">−∞</div>
-          </div>
-          <div class="stats-box">
-            <div class="stats-label">AVG RMS</div>
-            <div id="avgOutRms" class="stats-value">−∞</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    
-    
     <div class="meter-section">
       <div class="meter-col">
         <div class="control-group">
-          <label>Spectrum</label>
           <div class="spec-wrapper">
             <canvas id="spectrumCanvas" width="230" height="280"></canvas>
             <div class="spec-controls">
@@ -180,15 +183,12 @@
       </div>
 
       <div class="meter-col">
-        <div class="control-group">
-          <label>Phase Correlation</label>
-          <div id="correlationContainer">
-            <div id="correlationBar"></div>
+        <div class="vs-meter-block">
+          <div class="balance-group" title="L/R Energy Balance">
+            <span class="bal-label">L</span>
+            <canvas id="balanceCanvas"></canvas>
+            <span class="bal-label">R</span>
           </div>
-        </div>
-
-        <div class="control-group">
-          <label>Vectorscope</label>
           <div class="vs-wrapper">
             <canvas id="vectorscopeCanvas" width="150" height="150"></canvas>
             <canvas id="vectorscopeOverlay" width="150" height="150"></canvas>
@@ -196,7 +196,13 @@
               <button id="vsZoomIn"        class="vs-btn" title="Zoom in">+</button>
               <button id="vsZoomOut"       class="vs-btn" title="Zoom out">−</button>
               <button id="vsOverlayToggle" class="vs-btn" title="Toggle reference overlay">⊙</button>
+              <button id="vsModeToggle"    class="vs-btn" title="Toggle dots / line view">∿</button>
             </div>
+          </div>
+          <div class="correlation-group" title="Phase Correlation">
+            <span class="corr-label">-1</span>
+            <canvas id="correlationCanvas"></canvas>
+            <span class="corr-label">+1</span>
           </div>
         </div>
       </div>

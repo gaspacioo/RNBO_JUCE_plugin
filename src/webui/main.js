@@ -78,6 +78,15 @@ const METER_MAX_DB = 0;
 const CLIP_THRESHOLD_DB = -0.1;
 const CLIP_HOLD_MS = 400;
 const SILENCE_DB = -90;
+const PEAK_HOLD_MS = 2000;    // ms di hold prima del decadimento
+const PEAK_DECAY_DB_S = 8;    // dB/s di discesa dopo lo scadere del hold
+
+const _meterPeak = {
+    inL:  { db: -Infinity, heldAt: 0 },
+    inR:  { db: -Infinity, heldAt: 0 },
+    outL: { db: -Infinity, heldAt: 0 },
+    outR: { db: -Infinity, heldAt: 0 },
+};
 const DELTA_SMOOTH = 0.97;  // EMA α — ~0.5s time constant at 60 Hz
 
 const GAIN_MIN_DB = -60;
@@ -113,8 +122,6 @@ const DIST_RANGE = { start: DIST_MIN, end: DIST_MAX, skew: 1 };
 const clipHold = { input: null, output: null };
 
 let correlationValue = 0;
-let _vsLastX = null;
-let _vsLastY = null;
 let _vsPendingBatch = null;
 
 const VS_ZOOM_MIN  = 0.25;
@@ -123,6 +130,9 @@ const VS_ZOOM_STEP = 1.2;
 let _vsZoom          = 1.0;
 let _vsShowOverlay   = true;
 let _vsOverlayCanvas = null;
+let _vsDotsMode      = true;   // true: nuvola di puntini, false: linea continua + cursore
+let _vsLastX = null;           // continuità della traccia in modalità linea
+let _vsLastY = null;
 
 // ===== MENU ABOUT =====
 function setupAboutMenu() {
@@ -261,6 +271,11 @@ function clampGainDb(db) {
     return Math.max(GAIN_MIN_DB, Math.min(GAIN_MAX_DB, db));
 }
 
+// Evita "-0.0": valori che toFixed(1) arrotonderebbe a "0.0" vengono forzati a +0
+function snapZero(db) {
+    return Math.abs(db) < 0.05 ? 0 : db;
+}
+
 function parseNumericInputValue(value) {
     return Number.parseFloat(String(value).replace(',', '.'));
 }
@@ -382,6 +397,31 @@ function normalizeDb(raw) {
     return v;
 }
 
+function getHeldPeak(key, incoming) {
+    const now = performance.now();
+    const p = _meterPeak[key];
+    const db = normalizeDb(incoming);
+
+    // Valore attualmente visualizzato, tenendo conto dell'eventuale decadimento in corso.
+    let current = -Infinity;
+    if (Number.isFinite(p.db)) {
+        const elapsed = now - p.heldAt;
+        current = elapsed <= PEAK_HOLD_MS
+            ? p.db
+            : p.db - (elapsed - PEAK_HOLD_MS) / 1000 * PEAK_DECAY_DB_S;
+    }
+
+    // Se il nuovo livello supera quello mostrato (anche se in discesa), riaggancia e
+    // riparte l'hold. Confrontiamo col valore corrente decaduto, non con l'originale.
+    if (Number.isFinite(db) && db > current) {
+        p.db = db;
+        p.heldAt = now;
+        return db;
+    }
+
+    return current;
+}
+
 function dbToPercent(db) {
     const v = normalizeDb(db);
     if (!Number.isFinite(v))
@@ -462,37 +502,85 @@ function parseMeterPayload(data) {
     return data;
 }
 
-function updateCorrelationUI(val) {
-    const bar = document.getElementById('correlationBar');
-    if (!bar) return;
+// ---- Segmented LED meter (shared by balance and correlation) ----
+const _SEG_N      = 31;   // dispari: il segmento centrale corrisponde esattamente allo zero
+const _SEG_GAP    = 1.5;
+const _SEG_MIX    = (c1, c2, t) => c1.map((v, i) => Math.round(v + (c2[i] - v) * t));
+const _SEG_WHITE  = [255, 255, 255];
+const _SEG_ORANGE = [230, 160, 80];
+const _SEG_GREEN  = [70, 210, 90];
+const _SEG_RED    = [225, 60, 60];
 
-    // 1. Assicuriamoci che il valore sia compreso tra -1 e 1
-    const clampedVal = Math.max(-1, Math.min(1, val));
-    
-    // 2. Calcoliamo l'intensità (da 0 a 1)
-    const absVal = Math.abs(clampedVal);
-    
-    // 3. La larghezza massima verso un lato è il 50% del contenitore totale
-    const widthPercent = absVal * 50;
+function _segCorrColor(segVal) {
+    const absV = Math.abs(segVal);
+    if (absV <= 0.5) return _SEG_MIX(_SEG_WHITE, _SEG_ORANGE, absV * 2);
+    const target = segVal >= 0 ? _SEG_GREEN : _SEG_RED;
+    return _SEG_MIX(_SEG_ORANGE, target, Math.min(1, (absV - 0.5) / 0.45));
+}
 
-    // 4. Posizionamento: se negativo va a sinistra del centro, se positivo a destra
-    if (clampedVal < 0) {
-        // Estensione verso sinistra: il punto di partenza si sposta indietro
-        bar.style.left = (50 - widthPercent) + '%';
-        bar.style.width = widthPercent + '%';
-    } else {
-        // Estensione verso destra: il punto di partenza è fisso al 50%
-        bar.style.left = '50%';
-        bar.style.width = widthPercent + '%';
+function _drawSegmentMeter(canvasId, value, mode) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const dpr  = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const logW = Math.round(rect.width)  || 150;
+    const logH = Math.round(rect.height) || 10;
+    if (canvas.width !== Math.round(logW * dpr) || canvas.height !== Math.round(logH * dpr)) {
+        canvas.width  = Math.round(logW * dpr);
+        canvas.height = Math.round(logH * dpr);
     }
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, logW, logH);
 
-    // 5. Calcolo del colore dinamico
-    // absVal = 0   => r: 0,   g: 255 (Verde puro al centro)
-    // absVal = 1   => r: 255, g: 0   (Rosso puro agli estremi)
-    const r = Math.round(absVal * 255);
-    const g = Math.round((1 - absVal) * 255);
-    
-    bar.style.backgroundColor = `rgb(${r}, ${g}, 0)`;
+    const n    = _SEG_N;
+    const segW = (logW - _SEG_GAP * (n - 1)) / n;
+    const clamped = Math.max(-1, Math.min(1, value));
+    // posizione frazionaria del valore sulla scala dei segmenti
+    const posF = (clamped + 1) / 2 * (n - 1);
+
+    for (let i = 0; i < n; i++) {
+        const x      = i * (segW + _SEG_GAP);
+        const segVal = (i / (n - 1)) * 2 - 1;
+        let r, g, b, a;
+
+        if (mode === 'balance') {
+            // Indicatore bianco che scorre: il segmento più vicino è acceso,
+            // quello adiacente si accende in proporzione alla parte frazionaria
+            [r, g, b] = _SEG_WHITE;
+            const lit = Math.max(0, 1 - Math.abs(i - posF));
+            a = 0.10 + lit * 0.85;
+        } else {
+            // Correlazione: si accendono i segmenti dal centro (0) fino al valore,
+            // gli altri restano visibili in trasparenza col loro colore
+            [r, g, b] = _segCorrColor(segVal);
+            const lit = clamped >= 0
+                ? (segVal >= -1e-9 && segVal <= clamped + 1e-9)
+                : (segVal <=  1e-9 && segVal >= clamped - 1e-9);
+            a = lit ? 1.0 : 0.22;
+        }
+
+        ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
+        ctx.fillRect(x, 0, segW, logH);
+    }
+}
+
+function updateCorrelationUI(val) {
+    _drawSegmentMeter('correlationCanvas', val, 'correlation');
+}
+
+// Bilanciamento energetico L/R: -1 = tutto a sinistra, +1 = tutto a destra
+let _balanceSmooth = 0;
+
+function updateBalanceUI(lDbRaw, rDbRaw) {
+    const lDb = normalizeDb(lDbRaw);
+    const rDb = normalizeDb(rDbRaw);
+    const pL  = Number.isFinite(lDb) ? Math.pow(10, lDb / 10) : 0;
+    const pR  = Number.isFinite(rDb) ? Math.pow(10, rDb / 10) : 0;
+    const sum = pL + pR;
+    const target = sum > 1e-12 ? (pR - pL) / sum : 0;
+    _balanceSmooth += (target - _balanceSmooth) * 0.25;
+    _drawSegmentMeter('balanceCanvas', _balanceSmooth, 'balance');
 }
 
 function drawVectorscope() {
@@ -514,49 +602,66 @@ function drawVectorscope() {
         _vsPendingBatch = null;
 
         ctx.save();
-        // shadowBlur è in pixel fisici, non segue la transform: va scalato a mano
-        ctx.shadowBlur = 5 * _dpr;
-        ctx.shadowColor = 'rgba(194, 146, 68, 0.8)';
-        ctx.strokeStyle = 'rgb(240, 195, 120)';
-        ctx.lineWidth = 1.2;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
 
-        if (_vsLastX !== null) ctx.moveTo(_vsLastX, _vsLastY);
+        if (_vsDotsMode) {
+            // Nuvola di puntini giallo pallido (scatter), senza glow né linee
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = 'rgba(235, 235, 150, 0.85)';
 
-        for (let i = 0; i < bx.length; i++) {
-            const x = cx - bx[i] * cx * _vsZoom;  // negato: L→sinistra, R→destra
-            const y = cy - by[i] * cy * _vsZoom;
-            if (i === 0 && _vsLastX === null) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-            _vsLastX = x;
-            _vsLastY = y;
+            for (let i = 0; i < bx.length; i++) {
+                const x = cx - bx[i] * cx * _vsZoom;  // negato: L→sinistra, R→destra
+                const y = cy - by[i] * cy * _vsZoom;
+                ctx.fillRect(x - 0.6, y - 0.6, 1.2, 1.2);
+                _vsLastX = x;
+                _vsLastY = y;
+            }
+        } else {
+            // Linea continua con glow (fosforo CRT)
+            // shadowBlur è in pixel fisici, non segue la transform: va scalato a mano
+            ctx.shadowBlur = 5 * _dpr;
+            ctx.shadowColor = 'rgba(194, 146, 68, 0.8)';
+            ctx.strokeStyle = 'rgb(240, 195, 120)';
+            ctx.lineWidth = 1.2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.beginPath();
+
+            if (_vsLastX !== null) ctx.moveTo(_vsLastX, _vsLastY);
+
+            for (let i = 0; i < bx.length; i++) {
+                const x = cx - bx[i] * cx * _vsZoom;  // negato: L→sinistra, R→destra
+                const y = cy - by[i] * cy * _vsZoom;
+                if (i === 0 && _vsLastX === null) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+                _vsLastX = x;
+                _vsLastY = y;
+            }
+
+            ctx.stroke();
         }
 
-        ctx.stroke();
         ctx.restore();
     }
 
-    
+
     if (_vsOverlayCanvas) {
         const oc   = _vsOverlayCanvas;
         const octx = oc.getContext('2d');
         octx.clearRect(0, 0, w, h);
 
-        if (_vsShowOverlay) {
+        if (_vsShowOverlay)
             drawVectorscopeOverlay(octx, w, h, cx, cy);
 
-            if (_vsLastX !== null) {
-                octx.save();
-                octx.shadowBlur = 8 * _dpr;
-                octx.shadowColor = 'rgba(255, 220, 100, 1)';
-                octx.fillStyle = 'rgb(255, 240, 180)';
-                octx.beginPath();
-                octx.arc(_vsLastX, _vsLastY, 2, 0, Math.PI * 2);
-                octx.fill();
-                octx.restore();
-            }
+        // Pallino cursore sull'ultima posizione (solo in modalità linea)
+        if (!_vsDotsMode && _vsLastX !== null) {
+            octx.save();
+            octx.shadowBlur = 8 * _dpr;
+            octx.shadowColor = 'rgba(255, 220, 100, 1)';
+            octx.fillStyle = 'rgb(255, 240, 180)';
+            octx.beginPath();
+            octx.arc(_vsLastX, _vsLastY, 2, 0, Math.PI * 2);
+            octx.fill();
+            octx.restore();
         }
     }
 
@@ -564,33 +669,26 @@ function drawVectorscope() {
 }
 
 function drawVectorscopeOverlay(ctx, w, h, cx, cy) {
-    const r  = Math.min(cx, cy) - 1;
-    const d  = r * 0.7071;   // r / sqrt(2) — diagonal axis endpoints
-    const lr = r * 0.65;     // label position radius
-    const ld = lr * 0.7071;
+    const r = Math.min(cx, cy) - 1;   // semidiagonale del rombo (ampiezza unitaria)
 
     ctx.save();
     ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(140, 140, 140, 0.45)';
+    ctx.lineWidth = 1;
 
-    // Reference grid lines
-    ctx.strokeStyle = 'rgba(194, 146, 68, 0.9)';
-    ctx.lineWidth = 0.5;
-
-    // Outer circle (unity amplitude boundary)
+    // Rombo (quadrato ruotato di 45°): limite di ampiezza unitaria
     ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.moveTo(cx, cy - r);
+    ctx.lineTo(cx + r, cy);
+    ctx.lineTo(cx, cy + r);
+    ctx.lineTo(cx - r, cy);
+    ctx.closePath();
     ctx.stroke();
 
-    // M axis (vertical) and S axis (horizontal)
+    // Diagonali L/R a ±45° estese fino agli angoli del canvas
     ctx.beginPath();
-    ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r);
-    ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy);
-    ctx.stroke();
-
-    // L and R diagonal reference lines (±45°)
-    ctx.beginPath();
-    ctx.moveTo(cx - d, cy + d); ctx.lineTo(cx + d, cy - d); // L channel: upper-right
-    ctx.moveTo(cx + d, cy + d); ctx.lineTo(cx - d, cy - d); // R channel: upper-left
+    ctx.moveTo(0, 0); ctx.lineTo(w, h);   // R channel
+    ctx.moveTo(w, 0); ctx.lineTo(0, h);   // L channel
     ctx.stroke();
 
     ctx.restore();
@@ -645,7 +743,8 @@ const SPEC_RELEASE = 0.16;  // discesa più lenta (stile ballistics analogiche)
 const SPEC_F_MIN   = 20;
 const SPEC_F_MAX   = 20000;
 
-const SPEC_PEAK_DECAY = 0.1;   // dB per frame (~6 dB/s a 60 fps)
+const SPEC_PEAK_DECAY = 0.1;        // dB per frame durante il decadimento (~6 dB/s a 60 fps)
+const SPEC_PEAK_HOLD_FRAMES = 120;  // frame di hold prima del decadimento (~2s a 60 fps)
 const SPEC_TILT_DB_OCT = 3;    // pendenza pinking: rumore rosa appare piatto
 const SPEC_TILT_PIVOT  = 1000; // Hz — frequenza a guadagno zero del tilt
 // Sotto questa soglia la banda è considerata silenzio assoluto: nessuna barra
@@ -658,8 +757,10 @@ let _specTargetL = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
 let _specTargetR = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
 let _specDrawL   = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
 let _specDrawR   = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
-let _specPeakL   = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
-let _specPeakR   = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
+let _specPeakL    = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
+let _specPeakR    = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
+let _specPeakAgeL = new Uint16Array(SPEC_BANDS);  // frame dall'ultimo aggiornamento del peak
+let _specPeakAgeR = new Uint16Array(SPEC_BANDS);
 let _specPeakHold = false;
 let _specTiltOn   = false;
 // Media a lungo termine: media incrementale della potenza lineare per banda
@@ -809,9 +910,12 @@ function drawSpectrum() {
         }
 
         if (_specPeakHold) {
-            // Aggiorna i massimi con decay lento e disegna il trattino di hold
-            _specPeakL[b] = Math.max(_specDrawL[b], _specPeakL[b] - SPEC_PEAK_DECAY);
-            _specPeakR[b] = Math.max(_specDrawR[b], _specPeakR[b] - SPEC_PEAK_DECAY);
+            // Aggiorna i massimi: se il livello attuale supera il peak, resetta l'età.
+            // Solo dopo SPEC_PEAK_HOLD_FRAMES frame senza nuovi massimi inizia il decay.
+            if (_specDrawL[b] >= _specPeakL[b]) { _specPeakL[b] = _specDrawL[b]; _specPeakAgeL[b] = 0; }
+            else { _specPeakAgeL[b]++; if (_specPeakAgeL[b] > SPEC_PEAK_HOLD_FRAMES) _specPeakL[b] = Math.max(_specPeakL[b] - SPEC_PEAK_DECAY, SPEC_FLOOR_DB - 1); }
+            if (_specDrawR[b] >= _specPeakR[b]) { _specPeakR[b] = _specDrawR[b]; _specPeakAgeR[b] = 0; }
+            else { _specPeakAgeR[b]++; if (_specPeakAgeR[b] > SPEC_PEAK_HOLD_FRAMES) _specPeakR[b] = Math.max(_specPeakR[b] - SPEC_PEAK_DECAY, SPEC_FLOOR_DB - 1); }
 
             const pL = _specPeakL[b] <= SPEC_FLOOR_DB ? 0
                 : Math.min(1, (_specPeakL[b] + tilt - _specDbMin) / dbRange);
@@ -926,6 +1030,8 @@ function setupSpectrumControls() {
         if (!_specPeakHold) {
             _specPeakL.fill(SPEC_FLOOR_DB - 1);
             _specPeakR.fill(SPEC_FLOOR_DB - 1);
+            _specPeakAgeL.fill(0);
+            _specPeakAgeR.fill(0);
         }
         saveUiState({ specPeak: _specPeakHold });
     });
@@ -1043,7 +1149,7 @@ function wireGain({ paramId, sliderId, labelId, minDb, maxDb, stepDb, defaultDb 
 
             debugLog(`sync() from C++ - normalized: ${norm.toFixed(4)}, dB: ${db.toFixed(1)}`);
 
-            label.textContent = db.toFixed(1) + ' dB';
+            label.textContent = snapZero(db).toFixed(1) + ' dB';
 
             if (document.activeElement !== slider) {
                 slider.value = gainDbToSliderPos(db, minDb, maxDb).toFixed(4);
@@ -1063,7 +1169,7 @@ function wireGain({ paramId, sliderId, labelId, minDb, maxDb, stepDb, defaultDb 
 
             state.setNormalisedValue(normalised);
 
-            label.textContent = Math.max(range.start, Math.min(range.end, db)).toFixed(1) + ' dB';
+            label.textContent = snapZero(Math.max(range.start, Math.min(range.end, db))).toFixed(1) + ' dB';
         } catch (e) {
             debugLog(`✗ Error in setGainDb: ${e.message}`, 'ERROR');
         }
@@ -1372,45 +1478,228 @@ function wireToggleParameter({ paramId, buttonId, activeClass = 'active' }) {
 }
 
 function wireMSMatrix() {
-    debugLog("wireMSMatrix(): Inizializzazione controlli Mid/Side...", "INFO");
+    debugLog("wireMSMatrix(): Inizializzazione controlli Mid/Side con toggle L/R...", "INFO");
 
-    // --- CANALE MID ---
-    wireGain({
-        paramId: 'mid_gain',
-        sliderId: 'midGainSlider', // Assicurati che l'ID nell'HTML sia un input range
-        labelId: 'midGainValue',   // L'elemento span/div affiancato per il testo dei dB
-        minDb: MID_GAIN_MIN_DB,
-        maxDb: MID_GAIN_MAX_DB,
-        stepDb: MID_GAIN_STEP_DB,
-        defaultDb: MID_GAIN_DEFAULT_DB
+    const GAIN_RANGE_FALLBACK = { start: -60, end: 12, skew: 1 };
+
+    // Ottieni tutti e 4 i gain state upfront
+    let ch1Ms, ch2Ms, ch1Lr, ch2Lr;
+    let muCh1Ms, muCh2Ms, muCh1Lr, muCh2Lr;
+
+    try {
+        ch1Ms = Juce.getSliderState('mid_gain');
+        ch2Ms = Juce.getSliderState('side_gain');
+        ch1Lr = Juce.getSliderState('l_gain');
+        ch2Lr = Juce.getSliderState('r_gain');
+    } catch (e) {
+        debugLog('wireMSMatrix: gain states non disponibili: ' + e.message, 'ERROR');
+        return;
+    }
+
+    try {
+        muCh1Ms = Juce.getToggleState('mid_mute');
+        muCh2Ms = Juce.getToggleState('side_mute');
+        muCh1Lr = Juce.getToggleState('l_mute');
+        muCh2Lr = Juce.getToggleState('r_mute');
+    } catch (e) {
+        debugLog('wireMSMatrix: mute states non disponibili: ' + e.message, 'WARN');
+    }
+
+    // Oggetto di dispatch mutabile — tutti gli event handler vi leggono tramite ch.gainA/ch.gainB
+    // In questo modo il toggle cambia ch.gainA e il comportamento di tutti i listener cambia
+    const ch = {
+        gainA: ch1Ms, gainB: ch2Ms,
+        muteA: muCh1Ms, muteB: muCh2Ms
+    };
+
+    // DOM
+    const sl1   = document.getElementById('midGainSlider');
+    const lb1   = document.getElementById('midGainValue');
+    const mu1   = document.getElementById('midMuteBtn');
+    const sl2   = document.getElementById('sideGainSlider');
+    const lb2   = document.getElementById('sideGainValue');
+    const mu2   = document.getElementById('sideMuteBtn');
+    const lrBtn = document.getElementById('lrModeToggle');
+
+    if (!sl1 || !sl2) { debugLog('wireMSMatrix: slider non trovati', 'ERROR'); return; }
+
+    const normToDb = (state) => {
+        const range = getParamRange(state, GAIN_RANGE_FALLBACK);
+        return normalisedToDb(state.getNormalisedValue(), range);
+    };
+    const dbToNorm = (db, state) => {
+        const range = getParamRange(state, GAIN_RANGE_FALLBACK);
+        return dbToNormalised(db, range);
+    };
+
+    const syncA = () => {
+        const db = normToDb(ch.gainA);
+        lb1.textContent = snapZero(db).toFixed(1) + ' dB';
+        if (document.activeElement !== sl1)
+            sl1.value = gainDbToSliderPos(db, -60, 12).toFixed(4);
+    };
+    const syncB = () => {
+        const db = normToDb(ch.gainB);
+        lb2.textContent = snapZero(db).toFixed(1) + ' dB';
+        if (document.activeElement !== sl2)
+            sl2.value = gainDbToSliderPos(db, -60, 12).toFixed(4);
+    };
+    const syncMuteA = () => {
+        if (!ch.muteA) return;
+        const v = ch.muteA.getValue();
+        mu1?.classList.toggle('muted', v);
+        mu1?.setAttribute('aria-checked', String(v));
+    };
+    const syncMuteB = () => {
+        if (!ch.muteB) return;
+        const v = ch.muteB.getValue();
+        mu2?.classList.toggle('muted', v);
+        mu2?.setAttribute('aria-checked', String(v));
+    };
+
+    // Registra i listener su TUTTI e 4 gli state: quando un param cambia (automazione DAW)
+    // syncA/syncB leggono da ch.gainA/ch.gainB quindi aggiornano l'UI solo se attivo
+    ch1Ms.valueChangedEvent.addListener(syncA);
+    ch1Ms.propertiesChangedEvent.addListener(syncA);
+    ch1Lr.valueChangedEvent.addListener(syncA);
+    ch1Lr.propertiesChangedEvent.addListener(syncA);
+
+    ch2Ms.valueChangedEvent.addListener(syncB);
+    ch2Ms.propertiesChangedEvent.addListener(syncB);
+    ch2Lr.valueChangedEvent.addListener(syncB);
+    ch2Lr.propertiesChangedEvent.addListener(syncB);
+
+    if (muCh1Ms) muCh1Ms.valueChangedEvent.addListener(syncMuteA);
+    if (muCh1Lr) muCh1Lr.valueChangedEvent.addListener(syncMuteA);
+    if (muCh2Ms) muCh2Ms.valueChangedEvent.addListener(syncMuteB);
+    if (muCh2Lr) muCh2Lr.valueChangedEvent.addListener(syncMuteB);
+
+    // Slider 1 (MID / LEFT)
+    sl1.min = '0'; sl1.max = '1'; sl1.step = 'any';
+    sl1.addEventListener('mousedown', () => ch.gainA.sliderDragStarted());
+    sl1.addEventListener('touchstart', () => ch.gainA.sliderDragStarted(), { passive: true });
+    sl1.addEventListener('mouseup',   () => ch.gainA.sliderDragEnded());
+    sl1.addEventListener('touchend',  () => ch.gainA.sliderDragEnded());
+    sl1.addEventListener('input', () => {
+        const db = sliderPosToGainDb(parseFloat(sl1.value.replace(',', '.')), -60, 12);
+        ch.gainA.setNormalisedValue(dbToNorm(db, ch.gainA));
+        lb1.textContent = snapZero(db).toFixed(1) + ' dB';
+    });
+    sl1.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        ch.gainA.setNormalisedValue(dbToNorm(0, ch.gainA));
+        syncA(); sl1.blur();
     });
 
-    wireToggleParameter({
-        paramId: 'mid_mute',
-        buttonId: 'midMuteBtn',
-        activeClass: 'muted'
+    // Slider 2 (SIDE / RIGHT)
+    sl2.min = '0'; sl2.max = '1'; sl2.step = 'any';
+    sl2.addEventListener('mousedown', () => ch.gainB.sliderDragStarted());
+    sl2.addEventListener('touchstart', () => ch.gainB.sliderDragStarted(), { passive: true });
+    sl2.addEventListener('mouseup',   () => ch.gainB.sliderDragEnded());
+    sl2.addEventListener('touchend',  () => ch.gainB.sliderDragEnded());
+    sl2.addEventListener('input', () => {
+        const db = sliderPosToGainDb(parseFloat(sl2.value.replace(',', '.')), -60, 12);
+        ch.gainB.setNormalisedValue(dbToNorm(db, ch.gainB));
+        lb2.textContent = snapZero(db).toFixed(1) + ' dB';
+    });
+    sl2.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        ch.gainB.setNormalisedValue(dbToNorm(0, ch.gainB));
+        syncB(); sl2.blur();
     });
 
-    // --- CANALE SIDE ---
-    wireGain({
-        paramId: 'side_gain',
-        sliderId: 'sideGainSlider',
-        labelId: 'sideGainValue',
-    	minDb: SIDE_GAIN_MIN_DB,
-        maxDb: SIDE_GAIN_MAX_DB,
-        stepDb: SIDE_GAIN_STEP_DB,
-        defaultDb: SIDE_GAIN_DEFAULT_DB
-    });
+    // Mute buttons
+    if (mu1) mu1.addEventListener('click', () => { if (ch.muteA) { ch.muteA.setValue(!ch.muteA.getValue()); syncMuteA(); } });
+    if (mu2) mu2.addEventListener('click', () => { if (ch.muteB) { ch.muteB.setValue(!ch.muteB.getValue()); syncMuteB(); } });
 
-    wireToggleParameter({
-        paramId: 'side_mute',
-        buttonId: 'sideMuteBtn',
-        activeClass: 'muted'
+    // Toggle L/R ↔ M/S
+    // I due set di parametri sono indipendenti e cumulativi: il toggle non
+    // modifica alcun valore, cambia solo quale set gli slider mostrano e
+    // controllano. Un mid_gain a -6 dB continua ad agire sull'audio anche
+    // mentre gli slider sono in modalità L/R.
+    let _lrActive = false;
+    if (lrBtn) {
+        lrBtn.addEventListener('click', () => {
+            _lrActive = !_lrActive;
+
+            if (_lrActive) {
+                ch.gainA = ch1Lr; ch.gainB = ch2Lr;
+                ch.muteA = muCh1Lr; ch.muteB = muCh2Lr;
+                if (mu1) mu1.textContent = 'Left';
+                if (mu2) mu2.textContent = 'Right';
+                lrBtn.textContent = 'L/R';
+                lrBtn.classList.add('active');
+            } else {
+                ch.gainA = ch1Ms; ch.gainB = ch2Ms;
+                ch.muteA = muCh1Ms; ch.muteB = muCh2Ms;
+                if (mu1) mu1.textContent = 'Mid';
+                if (mu2) mu2.textContent = 'Side';
+                lrBtn.textContent = 'M/S';
+                lrBtn.classList.remove('active');
+            }
+
+            syncA(); syncB();
+            syncMuteA(); syncMuteB();
+        });
+    }
+
+    // Reset una tantum dei gain a 0 dB (i WebSliderRelay partono da -60 dB).
+    // ATTENZIONE: setNormalisedValue converte il normalizzato in valore reale
+    // usando state.properties, che alla creazione vale {start: 0, end: 1} — i
+    // valori veri (-60..12) arrivano dal backend in modo asincrono. Resettare
+    // subito manderebbe al parametro "0.83 dB" invece di 0 dB, quindi il reset
+    // attende l'arrivo delle properties reali tramite propertiesChangedEvent.
+    const resetGainOnce = (state) => {
+        let done = false;
+        const tryReset = () => {
+            if (done) return;
+            const props = state.properties;
+            if (!props || !(Number(props.end) - Number(props.start) > PARAM_RANGE_MIN_SPAN)) return;
+            done = true;
+            try {
+                state.setNormalisedValue(dbToNorm(0, state));
+            } catch (e) {
+                debugLog('wireMSMatrix: reset gain fallito: ' + e.message, 'WARN');
+            }
+        };
+        state.propertiesChangedEvent.addListener(tryReset);
+        tryReset();
+    };
+    resetGainOnce(ch1Ms);
+    resetGainOnce(ch2Ms);
+    resetGainOnce(ch1Lr);
+    resetGainOnce(ch2Lr);
+    if (muCh1Lr) { try { muCh1Lr.setValue(false); } catch (e) {} }
+    if (muCh2Lr) { try { muCh2Lr.setValue(false); } catch (e) {} }
+
+    // Sync iniziale UI
+    setTimeout(() => {
+        syncA(); syncB();
+        syncMuteA(); syncMuteB();
+    }, 50);
+
+    debugLog('✓ wireMSMatrix completato con toggle L/R', 'SUCCESS');
+}
+
+// Popola le scale dBFS dei meter: etichette posizionate con la stessa
+// mappatura lineare di dbToPercent (METER_MIN_DB → 0%, METER_MAX_DB → 100%)
+function buildMeterScales() {
+    const marks = [0, -3, -6, -9, -12, -18, -24, -30, -40, -50, -60];
+    document.querySelectorAll('.meter-scale').forEach((el) => {
+        el.innerHTML = '';
+        for (const db of marks) {
+            if (db < METER_MIN_DB || db > METER_MAX_DB) continue;
+            const s = document.createElement('span');
+            s.textContent = String(db);
+            s.style.bottom = ((db - METER_MIN_DB) / (METER_MAX_DB - METER_MIN_DB) * 100) + '%';
+            el.appendChild(s);
+        }
     });
 }
 
 function wireMeters() {
     debugLog('wireMeters: Starting...');
+    buildMeterScales();
     const backend = window.__JUCE__?.backend;
     if (!backend?.addEventListener) {
         debugLog('✗ Backend not available or addEventListener not found', 'ERROR');
@@ -1425,12 +1714,16 @@ function wireMeters() {
             setStereoMeter(
                 'inputFillL', 'inputFillR', 'inputPeakL', 'inputPeakR',
                 'inputRmsL', 'inputRmsR', 'inputPeakValL', 'inputPeakValR',
-                'inputClip', 'input', data.inL, data.inR, data.inPeakL, data.inPeakR
+                'inputClip', 'input',
+                data.inL, data.inR,
+                getHeldPeak('inL', data.inPeakL), getHeldPeak('inR', data.inPeakR)
             );
             setStereoMeter(
                 'outputFillL', 'outputFillR', 'outputPeakL', 'outputPeakR',
                 'outputRmsL', 'outputRmsR', 'outputPeakValL', 'outputPeakValR',
-                'outputClip', 'output', data.outL, data.outR, data.outPeakL, data.outPeakR
+                'outputClip', 'output',
+                data.outL, data.outR,
+                getHeldPeak('outL', data.outPeakL), getHeldPeak('outR', data.outPeakR)
             );
             setDelayTime(data.delayTime, data.sampleRate);
 
@@ -1458,6 +1751,8 @@ function wireMeters() {
             if (data.correlationValue !== undefined) {
                 updateCorrelationUI(data.correlationValue);
             }
+
+            updateBalanceUI(data.outL, data.outR);
             
             if (data.scopeBatchX && data.scopeBatchX.length > 0)
                 _vsPendingBatch = { bx: data.scopeBatchX, by: data.scopeBatchY };
@@ -1487,6 +1782,10 @@ function wireMeters() {
     setupSpectrumControls();
     drawVectorscope();
     drawSpectrum();
+
+    // Render iniziale delle strip (visibili anche in silenzio)
+    _drawSegmentMeter('balanceCanvas', 0, 'balance');
+    _drawSegmentMeter('correlationCanvas', 0, 'correlation');
 }
 
 function changeVsZoom(direction) {
@@ -1494,6 +1793,7 @@ function changeVsZoom(direction) {
         ? Math.min(VS_ZOOM_MAX, _vsZoom * VS_ZOOM_STEP)
         : Math.max(VS_ZOOM_MIN, _vsZoom / VS_ZOOM_STEP);
 
+    // Evita il segmento spurio tra la vecchia e la nuova scala in modalità linea
     _vsLastX = null;
     _vsLastY = null;
     saveUiState({ vsZoom: _vsZoom });
@@ -1523,6 +1823,21 @@ function setupVectorscopeZoom() {
         _vsShowOverlay = !_vsShowOverlay;
         btnOverlay.style.opacity = _vsShowOverlay ? '1' : '0.35';
         saveUiState({ vsOverlay: _vsShowOverlay });
+    });
+
+    // Toggle modalità traccia: nuvola di puntini ↔ linea continua + cursore
+    if (saved.vsDots === false)
+        _vsDotsMode = false;
+
+    const btnMode = document.getElementById('vsModeToggle');
+    const syncModeBtn = () => { btnMode.textContent = _vsDotsMode ? '∴' : '∿'; };
+    syncModeBtn();
+    btnMode.addEventListener('click', () => {
+        _vsDotsMode = !_vsDotsMode;
+        _vsLastX = null;
+        _vsLastY = null;
+        syncModeBtn();
+        saveUiState({ vsDots: _vsDotsMode });
     });
 }
 
