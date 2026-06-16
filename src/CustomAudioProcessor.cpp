@@ -252,11 +252,8 @@ void CustomAudioProcessor::computeSpectrumFrame (bool lowBands)
     const auto* window  = lowBands ? _hannWindowLow : _hannWindow;
     const int   fftLen  = lowBands ? kFftLowSize    : kFftSize;
 
-    // Fattore di normalizzazione: una sinusoide full-scale arriva a ~0 dB
-    // (1/N per la FFT, x2 per lo spettro single-sided, x2 per il guadagno coerente di Hann)
     const float magScale = 4.0f / (float) fftLen;
 
-    // Offset per leggere gli ultimi fftLen campioni che terminano alla posizione di scrittura
     const int ringOffset = _fftRingPos + kFftLowSize - fftLen;
 
     const float* rings[2]   = { _fftRingL, _fftRingR };
@@ -264,7 +261,6 @@ void CustomAudioProcessor::computeSpectrumFrame (bool lowBands)
 
     for (int ch = 0; ch < 2; ++ch)
     {
-        // Srotola il ring buffer in ordine temporale applicando la finestra
         for (int k = 0; k < fftLen; ++k)
             _fftWorkBuf[k] = rings[ch][(ringOffset + k) & (kFftLowSize - 1)] * window[k];
 
@@ -276,7 +272,6 @@ void CustomAudioProcessor::computeSpectrumFrame (bool lowBands)
             if (_bandUseLow[b] != lowBands)
                 continue;
 
-            // Picco di magnitudine sui bin coperti dalla banda
             float maxMagSq = 0.0f;
 
             for (int bin = _bandLo[b]; bin <= _bandHi[b]; ++bin)
@@ -291,13 +286,10 @@ void CustomAudioProcessor::computeSpectrumFrame (bool lowBands)
         }
     }
 
-    // Try-lock: se il timer della UI sta leggendo, salta il frame senza bloccare l'audio thread
     const juce::GenericScopedTryLock<juce::CriticalSection> lock (_specLock);
 
     if (lock.isLocked())
     {
-        // EMA: la FFT lunga produce frame a cadenza dimezzata, alpha ridotto
-        // per mantenere una costante di tempo simile alle altre bande
         const float alpha = lowBands ? 0.6f : 0.7f;
 
         for (int b = 0; b < kSpecBands; ++b)

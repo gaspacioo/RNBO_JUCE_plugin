@@ -43,16 +43,12 @@ public:
 
     MeterLevels meterLevels;
 
-    // _scopeDownsample viene calcolato in prepareToPlay per mantenere ~200 pt/frame
     static constexpr int kScopeBufferSize = 4096;
 
     juce::AbstractFifo _scopeFifo { kScopeBufferSize };
     float _scopeBufX[kScopeBufferSize] = {};
     float _scopeBufY[kScopeBufferSize] = {};
 
-    // Spettro multi-risoluzione, bande log-spaced 20 Hz – 20 kHz:
-    // FFT corta (2048, hop 50%) per medie/alte, FFT lunga (8192, hop 25%)
-    // per le bande sotto kSpecLowCrossHz dove servono più bin per ottava
     static constexpr int kFftOrder    = 11;
     static constexpr int kFftSize     = 1 << kFftOrder;
     static constexpr int kFftHop      = kFftSize / 2;
@@ -62,7 +58,6 @@ public:
     static constexpr int kSpecBands   = 96;
     static constexpr float kSpecLowCrossHz = 300.0f;
 
-    // Magnitudini in dB per banda, protette da _specLock (il timer della UI legge da qui)
     float _specMagL[kSpecBands] = {};
     float _specMagR[kSpecBands] = {};
     std::atomic<bool>     _specNewData { false };
@@ -82,8 +77,6 @@ private:
     float _hannWindow[kFftSize]       = {};
     float _hannWindowLow[kFftLowSize] = {};
 
-    // Ring buffer condiviso, dimensionato sulla FFT lunga:
-    // la FFT corta legge solo gli ultimi kFftSize campioni
     float _fftRingL[kFftLowSize] = {};
     float _fftRingR[kFftLowSize] = {};
     int   _fftRingPos    = 0;
@@ -91,8 +84,6 @@ private:
     int   _fftLowHopCount = 0;
     float _fftWorkBuf[kFftLowSize * 2] = {};
 
-    // Range di bin FFT (inclusivo) coperto da ogni banda di display,
-    // riferito alla FFT lunga se _bandUseLow[b] è true
     int  _bandLo[kSpecBands]     = {};
     int  _bandHi[kSpecBands]     = {};
     bool _bandUseLow[kSpecBands] = {};

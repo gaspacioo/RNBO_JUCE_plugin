@@ -208,7 +208,6 @@ void WebBrowserAudioEditor::sendMeterLevelsToWebView()
         }
     }
 
-    // Spettro: invio decimato a ~15 Hz, solo se ci sono nuovi frame FFT
     if (++_specSendTick >= 4)
     {
         _specSendTick = 0;

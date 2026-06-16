@@ -91,12 +91,12 @@ void cancelClockEvents()
 {
     getEngine()->flushClockEvents(this, -368915887, false);
     getEngine()->flushClockEvents(this, 1910212691, false);
-    getEngine()->flushClockEvents(this, 1592269969, false);
     getEngine()->flushClockEvents(this, 1220262738, false);
+    getEngine()->flushClockEvents(this, 1964277200, false);
     getEngine()->flushClockEvents(this, -1508480176, false);
     getEngine()->flushClockEvents(this, 770648402, false);
-    getEngine()->flushClockEvents(this, 1964277200, false);
     getEngine()->flushClockEvents(this, 848255507, false);
+    getEngine()->flushClockEvents(this, 1592269969, false);
     getEngine()->flushClockEvents(this, 1646922831, false);
     getEngine()->flushClockEvents(this, -281953904, false);
 }
@@ -839,7 +839,7 @@ void getParameterInfo(ParameterIndex index, ParameterInfo * info) const {
             {
             info->type = ParameterTypeNumber;
             info->initialValue = 0;
-            info->min = -60;
+            info->min = -12;
             info->max = 12;
             info->exponent = 1;
             info->steps = 0;
@@ -858,7 +858,7 @@ void getParameterInfo(ParameterIndex index, ParameterInfo * info) const {
             {
             info->type = ParameterTypeNumber;
             info->initialValue = 0;
-            info->min = -60;
+            info->min = -12;
             info->max = 12;
             info->exponent = 1;
             info->steps = 0;
@@ -919,7 +919,7 @@ void getParameterInfo(ParameterIndex index, ParameterInfo * info) const {
             {
             info->type = ParameterTypeNumber;
             info->initialValue = 0;
-            info->min = -60;
+            info->min = -12;
             info->max = 12;
             info->exponent = 1;
             info->steps = 0;
@@ -938,7 +938,7 @@ void getParameterInfo(ParameterIndex index, ParameterInfo * info) const {
             {
             info->type = ParameterTypeNumber;
             info->initialValue = 0;
-            info->min = -60;
+            info->min = -12;
             info->max = 12;
             info->exponent = 1;
             info->steps = 0;
@@ -978,7 +978,7 @@ void getParameterInfo(ParameterIndex index, ParameterInfo * info) const {
             {
             info->type = ParameterTypeNumber;
             info->initialValue = 0;
-            info->min = -60;
+            info->min = -12;
             info->max = 12;
             info->exponent = 1;
             info->steps = 0;
@@ -1129,8 +1129,8 @@ ParameterValue convertToNormalizedParameterValue(ParameterIndex index, Parameter
     case 7:
         {
         {
-            value = (value < -60 ? -60 : (value > 12 ? 12 : value));
-            ParameterValue normalizedValue = (value - -60) / (12 - -60);
+            value = (value < -12 ? -12 : (value > 12 ? 12 : value));
+            ParameterValue normalizedValue = (value - -12) / (12 - -12);
             return normalizedValue;
         }
         }
@@ -1185,7 +1185,7 @@ ParameterValue convertFromNormalizedParameterValue(ParameterIndex index, Paramet
         {
         {
             {
-                return -60 + value * (12 - -60);
+                return -12 + value * (12 - -12);
             }
         }
         }
@@ -1295,12 +1295,12 @@ void processClockEvent(MillisecondTime time, ClockId index, bool hasValue, Param
         this->snapshot_02_out_set(value);
         break;
         }
-    case 1592269969:
+    case 1220262738:
         {
         this->line_01_tick_set(value);
         break;
         }
-    case 1220262738:
+    case 1964277200:
         {
         this->line_02_tick_set(value);
         break;
@@ -1315,12 +1315,12 @@ void processClockEvent(MillisecondTime time, ClockId index, bool hasValue, Param
         this->snapshot_04_out_set(value);
         break;
         }
-    case 1964277200:
+    case 848255507:
         {
         this->line_03_tick_set(value);
         break;
         }
-    case 848255507:
+    case 1592269969:
         {
         this->line_04_tick_set(value);
         break;
@@ -1842,7 +1842,7 @@ void startup() {
 }
 
 number param_01_value_constrain(number v) const {
-    v = (v > 12 ? 12 : (v < -60 ? -60 : v));
+    v = (v > 12 ? 12 : (v < -12 ? -12 : v));
     return v;
 }
 
@@ -1878,7 +1878,7 @@ void line_01_output_set(number v) {
 }
 
 void line_01_stop_bang() {
-    this->getEngine()->flushClockEvents(this, 1592269969, false);;
+    this->getEngine()->flushClockEvents(this, 1220262738, false);;
     this->line_01_pendingRamps->length = 0;
     this->line_01_startValue = this->line_01_output;
     this->line_01_slope = 0;
@@ -1898,7 +1898,7 @@ void line_01_grain_set(number v) {
     this->line_01_grain = v;
 
     if ((bool)(!(bool)(this->line_01_isFinished(this->line_01_startValue)))) {
-        this->getEngine()->flushClockEvents(this, 1592269969, false);;
+        this->getEngine()->flushClockEvents(this, 1220262738, false);;
         this->line_01_scheduleNext();
     }
 }
@@ -1951,7 +1951,7 @@ void expr_03_in1_set(number in1) {
 }
 
 number param_02_value_constrain(number v) const {
-    v = (v > 12 ? 12 : (v < -60 ? -60 : v));
+    v = (v > 12 ? 12 : (v < -12 ? -12 : v));
     return v;
 }
 
@@ -1987,7 +1987,7 @@ void line_02_output_set(number v) {
 }
 
 void line_02_stop_bang() {
-    this->getEngine()->flushClockEvents(this, 1220262738, false);;
+    this->getEngine()->flushClockEvents(this, 1964277200, false);;
     this->line_02_pendingRamps->length = 0;
     this->line_02_startValue = this->line_02_output;
     this->line_02_slope = 0;
@@ -2007,7 +2007,7 @@ void line_02_grain_set(number v) {
     this->line_02_grain = v;
 
     if ((bool)(!(bool)(this->line_02_isFinished(this->line_02_startValue)))) {
-        this->getEngine()->flushClockEvents(this, 1220262738, false);;
+        this->getEngine()->flushClockEvents(this, 1964277200, false);;
         this->line_02_scheduleNext();
     }
 }
@@ -2164,7 +2164,7 @@ void trigger_02_input_number_set(number v) {
 }
 
 number param_05_value_constrain(number v) const {
-    v = (v > 12 ? 12 : (v < -60 ? -60 : v));
+    v = (v > 12 ? 12 : (v < -12 ? -12 : v));
     return v;
 }
 
@@ -2200,7 +2200,7 @@ void line_03_output_set(number v) {
 }
 
 void line_03_stop_bang() {
-    this->getEngine()->flushClockEvents(this, 1964277200, false);;
+    this->getEngine()->flushClockEvents(this, 848255507, false);;
     this->line_03_pendingRamps->length = 0;
     this->line_03_startValue = this->line_03_output;
     this->line_03_slope = 0;
@@ -2220,7 +2220,7 @@ void line_03_grain_set(number v) {
     this->line_03_grain = v;
 
     if ((bool)(!(bool)(this->line_03_isFinished(this->line_03_startValue)))) {
-        this->getEngine()->flushClockEvents(this, 1964277200, false);;
+        this->getEngine()->flushClockEvents(this, 848255507, false);;
         this->line_03_scheduleNext();
     }
 }
@@ -2273,7 +2273,7 @@ void expr_11_in1_set(number in1) {
 }
 
 number param_06_value_constrain(number v) const {
-    v = (v > 12 ? 12 : (v < -60 ? -60 : v));
+    v = (v > 12 ? 12 : (v < -12 ? -12 : v));
     return v;
 }
 
@@ -2414,7 +2414,7 @@ void trigger_03_input_number_set(number v) {
 }
 
 number param_08_value_constrain(number v) const {
-    v = (v > 12 ? 12 : (v < -60 ? -60 : v));
+    v = (v > 12 ? 12 : (v < -12 ? -12 : v));
     return v;
 }
 
@@ -2450,7 +2450,7 @@ void line_04_output_set(number v) {
 }
 
 void line_04_stop_bang() {
-    this->getEngine()->flushClockEvents(this, 848255507, false);;
+    this->getEngine()->flushClockEvents(this, 1592269969, false);;
     this->line_04_pendingRamps->length = 0;
     this->line_04_startValue = this->line_04_output;
     this->line_04_slope = 0;
@@ -2470,7 +2470,7 @@ void line_04_grain_set(number v) {
     this->line_04_grain = v;
 
     if ((bool)(!(bool)(this->line_04_isFinished(this->line_04_startValue)))) {
-        this->getEngine()->flushClockEvents(this, 848255507, false);;
+        this->getEngine()->flushClockEvents(this, 1592269969, false);;
         this->line_04_scheduleNext();
     }
 }
@@ -3593,7 +3593,7 @@ void line_01_scheduleNext() {
         nextValue = this->line_01_valueAtTime(nextTime);
     }
 
-    this->getEngine()->scheduleClockEventWithValue(this, 1592269969, nextTime - currentTime + this->_currentTime, nextValue);;
+    this->getEngine()->scheduleClockEventWithValue(this, 1220262738, nextTime - currentTime + this->_currentTime, nextValue);;
 }
 
 void line_01_startRamp(number target, MillisecondTime time) {
@@ -3601,7 +3601,7 @@ void line_01_startRamp(number target, MillisecondTime time) {
     this->line_01_startValue = this->line_01_valueAtTime(currentTime);
     this->line_01_startTime = currentTime;
     this->line_01_currentTarget = target;
-    this->getEngine()->flushClockEvents(this, 1592269969, false);;
+    this->getEngine()->flushClockEvents(this, 1220262738, false);;
     number rise = target - this->line_01_startValue;
     this->line_01_slope = rise / time;
     this->line_01_scheduleNext();
@@ -3655,7 +3655,7 @@ void line_02_scheduleNext() {
         nextValue = this->line_02_valueAtTime(nextTime);
     }
 
-    this->getEngine()->scheduleClockEventWithValue(this, 1220262738, nextTime - currentTime + this->_currentTime, nextValue);;
+    this->getEngine()->scheduleClockEventWithValue(this, 1964277200, nextTime - currentTime + this->_currentTime, nextValue);;
 }
 
 void line_02_startRamp(number target, MillisecondTime time) {
@@ -3663,7 +3663,7 @@ void line_02_startRamp(number target, MillisecondTime time) {
     this->line_02_startValue = this->line_02_valueAtTime(currentTime);
     this->line_02_startTime = currentTime;
     this->line_02_currentTarget = target;
-    this->getEngine()->flushClockEvents(this, 1220262738, false);;
+    this->getEngine()->flushClockEvents(this, 1964277200, false);;
     number rise = target - this->line_02_startValue;
     this->line_02_slope = rise / time;
     this->line_02_scheduleNext();
@@ -4339,7 +4339,7 @@ void line_03_scheduleNext() {
         nextValue = this->line_03_valueAtTime(nextTime);
     }
 
-    this->getEngine()->scheduleClockEventWithValue(this, 1964277200, nextTime - currentTime + this->_currentTime, nextValue);;
+    this->getEngine()->scheduleClockEventWithValue(this, 848255507, nextTime - currentTime + this->_currentTime, nextValue);;
 }
 
 void line_03_startRamp(number target, MillisecondTime time) {
@@ -4347,7 +4347,7 @@ void line_03_startRamp(number target, MillisecondTime time) {
     this->line_03_startValue = this->line_03_valueAtTime(currentTime);
     this->line_03_startTime = currentTime;
     this->line_03_currentTarget = target;
-    this->getEngine()->flushClockEvents(this, 1964277200, false);;
+    this->getEngine()->flushClockEvents(this, 848255507, false);;
     number rise = target - this->line_03_startValue;
     this->line_03_slope = rise / time;
     this->line_03_scheduleNext();
@@ -4423,7 +4423,7 @@ void line_04_scheduleNext() {
         nextValue = this->line_04_valueAtTime(nextTime);
     }
 
-    this->getEngine()->scheduleClockEventWithValue(this, 848255507, nextTime - currentTime + this->_currentTime, nextValue);;
+    this->getEngine()->scheduleClockEventWithValue(this, 1592269969, nextTime - currentTime + this->_currentTime, nextValue);;
 }
 
 void line_04_startRamp(number target, MillisecondTime time) {
@@ -4431,7 +4431,7 @@ void line_04_startRamp(number target, MillisecondTime time) {
     this->line_04_startValue = this->line_04_valueAtTime(currentTime);
     this->line_04_startTime = currentTime;
     this->line_04_currentTarget = target;
-    this->getEngine()->flushClockEvents(this, 848255507, false);;
+    this->getEngine()->flushClockEvents(this, 1592269969, false);;
     number rise = target - this->line_04_startValue;
     this->line_04_slope = rise / time;
     this->line_04_scheduleNext();

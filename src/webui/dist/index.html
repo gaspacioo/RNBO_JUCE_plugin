@@ -51,7 +51,7 @@
             Mid
           </button>
           <div class="fader-track">
-            <input type="range" id="midGainSlider" min="-60" max="12" step="0.1" aria-label="Mid Volume" />
+            <input type="range" id="midGainSlider" min="-12" max="12" step="0.1" aria-label="Mid Volume" />
           </div>
           <span id="midGainValue">0.0 dB</span>
         </div>
@@ -63,7 +63,7 @@
             Side
           </button>
           <div class="fader-track">
-            <input type="range" id="sideGainSlider" min="-60" max="12" step="0.1" aria-label="Side Volume" />
+            <input type="range" id="sideGainSlider" min="-12" max="12" step="0.1" aria-label="Side Volume" />
           </div>
           <span id="sideGainValue">0.0 dB</span>
         </div>
@@ -71,15 +71,20 @@
         <div class="volume volume-spacer">
           <span class="volume-label">Volume</span>
           <div class="fader-track">
-            <input type="range" id="gainSlider" min="-60" max="12" step="0.1" aria-label="Volume" />
+            <input type="range" id="gainSlider" min="-12" max="12" step="0.1" aria-label="Volume" />
           </div>
           <span id="gainValue">0.0 dB</span>
         </div>
 
-        <button id="phaseToggleBtn" class="phase-toggle-small" aria-label="Toggle phase inversion" aria-pressed="false"
-          title="Phase Inversion">
-          φ
-        </button>
+        <div class="phase-btn-col">
+          <button id="phaseToggleBtn" class="phase-toggle-small" aria-label="Toggle phase inversion" aria-pressed="false"
+            title="Phase Inversion">
+            φ
+          </button>
+          <button id="phaseAlignBtn" class="phase-toggle-small" title="Phase Alignment">
+            ⧖
+          </button>
+        </div>
       </div>
 
       <div class="stats-panel">
@@ -209,8 +214,12 @@
       </div>
     </div>
 
-    <div class="phase-controls" aria-label="Phase alignment controls">
-      <div class="phase-title">Phase Align</div>
+  </div>
+
+  <div id="phaseAlignPopup" class="modal">
+    <div class="modal-content phase-align-content">
+      <h2>Phase Align</h2>
+      <hr class="modal-divider" />
       <div class="phase-grid">
         <label class="param-field" for="temperatureInput">
           <span class="param-label">Temperature</span>
@@ -220,7 +229,6 @@
             <span class="param-unit">°C</span>
           </span>
         </label>
-
         <label class="param-field" for="distanceInput">
           <span class="param-label">Distance</span>
           <span class="param-input-wrap">
@@ -231,9 +239,10 @@
         </label>
       </div>
       <div class="delay-info">
-        <span class="delay-label">Delay:</span>
+        <span id="delayEditBtn" class="delay-label delay-edit" title="Clicca per inserire il ritardo">Delay:</span>
         <span id="delayTimeValue" class="delay-value">0.0 ms</span>
       </div>
+      <button id="phaseAlignCloseBtn" class="modal-close-btn">Close</button>
     </div>
   </div>
 

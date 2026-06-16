@@ -89,17 +89,17 @@ const _meterPeak = {
 };
 const DELTA_SMOOTH = 0.97;  // EMA α — ~0.5s time constant at 60 Hz
 
-const GAIN_MIN_DB = -60;
+const GAIN_MIN_DB = -12;
 const GAIN_MAX_DB = 12;
 const GAIN_DEFAULT_DB = 0;
 const GAIN_STEP_DB = 0.1;
 
-const MID_GAIN_MIN_DB = -60;
+const MID_GAIN_MIN_DB = -12;
 const MID_GAIN_MAX_DB = 12;
 const MID_GAIN_DEFAULT_DB = 0;
 const MID_GAIN_STEP_DB = 0.1;
 
-const SIDE_GAIN_MIN_DB = -60;
+const SIDE_GAIN_MIN_DB = -12;
 const SIDE_GAIN_MAX_DB = 12;
 const SIDE_GAIN_DEFAULT_DB = 0;
 const SIDE_GAIN_STEP_DB = 0.1;
@@ -316,10 +316,44 @@ function initOutputStats() {
             outStatsState.maxDeltaL = Number.NEGATIVE_INFINITY;
             outStatsState.maxDeltaR = Number.NEGATIVE_INFINITY;
             
+            resetSpectrum();
+            resetVectorscope();
+
             updateOutputStatsUI();
             debugLog('✓ Output Stats Reset', 'SUCCESS');
         });
     }
+}
+
+// Azzera le barre dello spettro (livelli, peak hold e media a lungo termine)
+function resetSpectrum() {
+    _specTargetL.fill(SPEC_FLOOR_DB - 1);
+    _specTargetR.fill(SPEC_FLOOR_DB - 1);
+    _specDrawL.fill(SPEC_FLOOR_DB - 1);
+    _specDrawR.fill(SPEC_FLOOR_DB - 1);
+    _specPeakL.fill(SPEC_FLOOR_DB - 1);
+    _specPeakR.fill(SPEC_FLOOR_DB - 1);
+    _specPeakAgeL.fill(0);
+    _specPeakAgeR.fill(0);
+    _specAvgL.fill(0);
+    _specAvgR.fill(0);
+    _specAvgCount = 0;
+}
+
+// Cancella la persistenza (puntini fosforo) del vectorscope
+function resetVectorscope() {
+    _vsPendingBatch = null;
+    _vsLastX = null;
+    _vsLastY = null;
+    const canvas = document.getElementById('vectorscopeCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const w = _vsW || canvas.width;
+    const h = _vsH || canvas.height;
+    ctx.save();
+    ctx.setTransform(_dpr, 0, 0, _dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.restore();
 }
 
 function processOutputStats(outPeakL, outPeakR, outRmsL, outRmsR) {
@@ -781,7 +815,6 @@ function buildSpecTiltOffsets() {
     }
 }
 
-// Palette stile MiniMeters sul tema ambra: scuro → ambra → giallo brillante → quasi bianco
 function buildSpecPalette() {
     const stops = [
         [0.00,  40,  26,  12],
@@ -801,7 +834,6 @@ function buildSpecPalette() {
     }
 }
 
-// Posizione verticale di una frequenza: basse in basso, alte in alto (scala log)
 function specFreqY(freq, h) {
     return h - Math.log(freq / SPEC_F_MIN) / Math.log(SPEC_F_MAX / SPEC_F_MIN) * h;
 }
@@ -829,7 +861,6 @@ function drawSpectrumGrid(ctx, w, h, midX) {
         ctx.fillText(lbl, w - 2, y < 12 ? y + 6 : y - 5);
     }
 
-    // Linee verticali dB ogni 30 dB, adattate al range corrente
     ctx.strokeStyle = 'rgba(194, 146, 68, 0.08)';
     const halfW = midX - 1;
     for (let db = _specDbMin + 30; db <= -30; db += 30) {
@@ -841,11 +872,9 @@ function drawSpectrumGrid(ctx, w, h, midX) {
         ctx.stroke();
     }
 
-    // Indicatore del range corrente in basso a sinistra
     ctx.textAlign = 'left';
     ctx.fillText(_specDbMin + ' dB', 2, h - 6);
 
-    // Linea centrale di separazione L/R
     ctx.strokeStyle = 'rgba(194, 146, 68, 0.25)';
     ctx.beginPath();
     ctx.moveTo(midX, 0); ctx.lineTo(midX, h);
@@ -870,14 +899,12 @@ function drawSpectrum() {
     ctx.fillRect(0, 0, w, h);
     drawSpectrumGrid(ctx, w, h, midX);
 
-    // Media a lungo termine in secondo piano, sotto le barre istantanee
     if (_specAvgOn && _specAvgCount > 0) {
         drawSpectrumAvgSide(ctx, -1, midX, gap, halfW, h, rowH, dbRange);
         drawSpectrumAvgSide(ctx, +1, midX, gap, halfW, h, rowH, dbRange);
     }
 
     for (let b = 0; b < SPEC_BANDS; b++) {
-        // Ballistics: attacco rapido, rilascio lento
         const kL = _specTargetL[b] > _specDrawL[b] ? SPEC_ATTACK : SPEC_RELEASE;
         const kR = _specTargetR[b] > _specDrawR[b] ? SPEC_ATTACK : SPEC_RELEASE;
         _specDrawL[b] += (_specTargetL[b] - _specDrawL[b]) * kL;
@@ -1085,7 +1112,7 @@ function setupSpectrumControls() {
 }
 
 // ===== CORE LOGIC: SLIDER E PARAMETRI =====
-const FADER_UNITY_POS = 0.75;
+const FADER_UNITY_POS = 0.5;
 
 function gainDbToSliderPos(db, minDb, maxDb) {
     const clamped = Math.max(minDb, Math.min(maxDb, db));
@@ -1101,6 +1128,74 @@ function sliderPosToGainDb(pos, minDb, maxDb) {
         return minDb + (clamped / FADER_UNITY_POS) * -minDb;
     else
         return (clamped - FADER_UNITY_POS) / (1 - FADER_UNITY_POS) * maxDb;
+}
+
+// Rende un'etichetta dB editabile con doppio click.
+// onCommit(db) viene chiamato con il valore inserito dall'utente; onCancel() ripristina.
+// Rileva il doppio click manualmente tramite due 'click' ravvicinati.
+// In questo WebView 'dblclick' non scatta in modo affidabile sugli elementi
+// con user-select:none (ereditato da .panel); i 'click' invece arrivano sempre.
+function onManualDblClick(el, handler) {
+    let lastT = 0;
+    el.addEventListener('click', (e) => {
+        const now = Date.now();
+        if (now - lastT < 350) {
+            lastT = 0;
+            handler(e);
+        } else {
+            lastT = now;
+        }
+    });
+}
+
+function makeEditableLabel(labelEl, minDb, maxDb, onCommit) {
+    labelEl.style.cursor = 'text';
+    labelEl.title = 'Doppio click per inserire un valore';
+
+    onManualDblClick(labelEl, (e) => {
+        e.stopPropagation();
+        const current = parseFloat(labelEl.textContent) || 0;
+
+        const inp = document.createElement('input');
+        inp.type = 'number';
+        inp.value = current.toFixed(1);
+        inp.min = String(minDb);
+        inp.max = String(maxDb);
+        inp.step = '0.1';
+        inp.style.cssText = [
+            'width:52px', 'background:#1a1a1a', 'color:rgb(194,146,68)',
+            'border:1px solid rgb(194,146,68)', 'border-radius:2px',
+            'font:inherit', 'font-size:inherit', 'text-align:center',
+            'padding:0 2px', 'outline:none', 'appearance:textfield',
+            '-moz-appearance:textfield'
+        ].join(';');
+
+        let done = false;
+        const restore = () => {
+            if (done) return;
+            done = true;
+            if (inp.parentNode) labelEl.replaceChild(document.createTextNode(labelEl._savedText), inp);
+        };
+
+        labelEl._savedText = labelEl.textContent;
+        labelEl.textContent = '';
+        labelEl.appendChild(inp);
+        setTimeout(() => { inp.focus(); inp.select(); }, 0);
+
+        const commit = () => {
+            if (done) return;
+            done = true;
+            const db = Math.max(minDb, Math.min(maxDb, parseFloat(inp.value.replace(',', '.')) || 0));
+            onCommit(db);
+            inp.remove();
+        };
+
+        inp.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter')  { ev.preventDefault(); commit(); }
+            if (ev.key === 'Escape') { ev.preventDefault(); restore(); }
+        });
+        inp.addEventListener('blur', commit);
+    });
 }
 
 function wireGain({ paramId, sliderId, labelId, minDb, maxDb, stepDb, defaultDb }) {
@@ -1222,10 +1317,15 @@ function wireGain({ paramId, sliderId, labelId, minDb, maxDb, stepDb, defaultDb 
         sync();
     });
 
+    makeEditableLabel(label, minDb, maxDb, (db) => {
+        setGainDb(db);
+        slider.value = gainDbToSliderPos(db, minDb, maxDb).toFixed(4);
+    });
+
     debugLog('✓ wireGain completed successfully', 'SUCCESS');
 }
 
-function wireNumericParameter({ paramId, inputId, fallbackRange, step, defaultValue, decimals = 1 }) {
+function wireNumericParameter({ paramId, inputId, fallbackRange, step, defaultValue, decimals = 1, onValueChange }) {
     debugLog(`wireNumericParameter(${paramId}): Starting...`);
 
     const input = document.getElementById(inputId);
@@ -1264,6 +1364,8 @@ function wireNumericParameter({ paramId, inputId, fallbackRange, step, defaultVa
 
             if (document.activeElement !== input)
                 input.value = formatNumericValue(value, decimals);
+
+            if (onValueChange) onValueChange(value);
         } catch (e) {
             debugLog(`✗ Error syncing ${paramId}: ${e.message}`, 'ERROR');
         }
@@ -1283,6 +1385,8 @@ function wireNumericParameter({ paramId, inputId, fallbackRange, step, defaultVa
             input.classList.remove('invalid');
             if (updateInput)
                 input.value = formatNumericValue(clamped, decimals);
+
+            if (onValueChange) onValueChange(clamped);
         } catch (e) {
             debugLog(`✗ Error setting ${paramId}: ${e.message}`, 'ERROR');
         }
@@ -1360,7 +1464,22 @@ function wireNumericParameter({ paramId, inputId, fallbackRange, step, defaultVa
     });
 
     debugLog(`✓ wireNumericParameter(${paramId}) completed successfully`, 'SUCCESS');
+
+    // API per pilotare il parametro dall'esterno. NB: si imposta il valore preciso
+    // direttamente, senza passare da commitInput() che rileggerebbe il campo
+    // arrotondato (es. 0.3434 → "0.3") perdendo precisione.
+    return {
+        setValue: (value) => {
+            try { state.sliderDragStarted(); } catch (e) {}
+            setParameterValue(value, true);
+            try { state.sliderDragEnded(); } catch (e) {}
+        },
+    };
 }
+
+// Stato condiviso per la modifica manuale del delay (campo "Delay")
+let _phaseTempVal   = TEMP_DEFAULT;
+let _phaseSampleRate = 0;
 
 function wirePhaseControls() {
     wireNumericParameter({
@@ -1369,9 +1488,10 @@ function wirePhaseControls() {
         fallbackRange: TEMP_RANGE,
         step: TEMP_STEP,
         defaultValue: TEMP_DEFAULT,
+        onValueChange: (v) => { _phaseTempVal = v; },
     });
 
-    wireNumericParameter({
+    const distanceApi = wireNumericParameter({
         paramId: 'distance',
         inputId: 'distanceInput',
         fallbackRange: DIST_RANGE,
@@ -1379,10 +1499,107 @@ function wirePhaseControls() {
         defaultValue: DIST_DEFAULT,
     });
 
+    // Campo Delay editabile: l'utente inserisce ms (o samples col suffisso "sa"/"s"),
+    // si ricava la distanza con la formula inversa della patch e si scrive su `distance`.
+    setupDelayEditing(distanceApi);
+
     wireToggleParameter({
         paramId: 'phase_inv',
         buttonId: 'phaseToggleBtn',
         activeClass: 'active'
+    });
+
+    // Modal Phase Alignment (stesso comportamento del menu About)
+    const alignBtn  = document.getElementById('phaseAlignBtn');
+    const modal     = document.getElementById('phaseAlignPopup');
+    const closeBtn  = document.getElementById('phaseAlignCloseBtn');
+    if (alignBtn && modal) {
+        const toggleModal = () => {
+            const isOpen = window.getComputedStyle(modal).display === 'flex';
+            modal.style.display = isOpen ? 'none' : 'flex';
+            alignBtn.classList.toggle('active', !isOpen);
+        };
+        alignBtn.onclick = toggleModal;
+        if (closeBtn) closeBtn.onclick = toggleModal;
+        // Chiude cliccando sullo sfondo del modal
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) toggleModal();
+        });
+    }
+}
+
+// Velocità del suono usata nella patch RNBO: c = 331.4 + 0.6·T  (m/s)
+function speedOfSound(tempC) {
+    return 331.4 + 0.6 * tempC;
+}
+
+// delay (ms) → distanza (m), inversa di:  delay_ms = distance / c · 1000
+function delayMsToDistance(delayMs, tempC) {
+    return (delayMs / 1000) * speedOfSound(tempC);
+}
+
+function setupDelayEditing(distanceApi) {
+    const labelEl = document.getElementById('delayTimeValue');
+    const editBtn = document.getElementById('delayEditBtn');
+    if (!labelEl || !editBtn || !distanceApi) return;
+
+    let _editing = false;
+
+    editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (_editing) return;
+        _editing = true;
+
+        // ms correnti dal testo "X.X ms (...)"
+        const currentMs = parseFloat(labelEl.textContent) || 0;
+
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.value = currentMs.toFixed(1);
+        inp.style.cssText = [
+            'width:70px', 'background:#1a1a1a', 'color:rgb(194,146,68)',
+            'border:1px solid rgb(194,146,68)', 'border-radius:2px',
+            'font:inherit', 'font-size:inherit', 'text-align:center',
+            'padding:0 2px', 'outline:none', 'user-select:text'
+        ].join(';');
+
+        const saved = labelEl.textContent;
+        let done = false;
+
+        const finish = (apply) => {
+            if (done) return;
+            done = true;
+            _editing = false;
+
+            if (apply) {
+                const raw = inp.value.trim().toLowerCase().replace(',', '.');
+                const num = parseFloat(raw);
+                if (Number.isFinite(num)) {
+                    // Suffisso "sa"/"s"/"samples" ⇒ il valore è in sample
+                    const isSamples = /(sa|s|samples)$/.test(raw) && !/ms$/.test(raw);
+                    let delayMs = num;
+                    if (isSamples && _phaseSampleRate > 0)
+                        delayMs = num / _phaseSampleRate * 1000;
+
+                    const distance = delayMsToDistance(delayMs, _phaseTempVal);
+                    distanceApi.setValue(distance);   // clampata a [0, 60] m dal parametro
+                }
+            }
+
+            if (inp.parentNode) labelEl.replaceChild(document.createTextNode(saved), inp);
+        };
+
+        labelEl.textContent = '';
+        labelEl.appendChild(inp);
+
+        // focus/select nel tick successivo: evita il blur immediato post-dblclick
+        setTimeout(() => { inp.focus(); inp.select(); }, 0);
+
+        inp.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter')  { ev.preventDefault(); finish(true); }
+            if (ev.key === 'Escape') { ev.preventDefault(); finish(false); }
+        });
+        inp.addEventListener('blur', () => finish(true));
     });
 }
 
@@ -1390,12 +1607,27 @@ function setDelayTime(delayValue, sampleRate) {
     const delayLabel = document.getElementById('delayTimeValue');
     if (!delayLabel) return;
 
+    if (Number.isFinite(sampleRate) && sampleRate > 0)
+        _phaseSampleRate = sampleRate;
+
+    // Mentre l'utente sta digitando nel campo, non sovrascrivere il testo
+    if (delayLabel.firstElementChild && delayLabel.firstElementChild.tagName === 'INPUT')
+        return;
+
     let text = formatNumericValue(delayValue, 1) + ' ms';
+    let samples = 0;
     if (Number.isFinite(sampleRate) && sampleRate > 0) {
-        const samples = (delayValue * sampleRate) / 1000;
-        text += ` (${Math.round(samples)} sa)`;
+        samples = Math.round((delayValue * sampleRate) / 1000);
+        text += ` (${samples} sa)`;
     }
     delayLabel.textContent = text;
+
+    // Illumina il button ⧖ se e solo se il ritardo è diverso da 0 ms / 0 sample
+    const alignBtn = document.getElementById('phaseAlignBtn');
+    if (alignBtn) {
+        const engaged = Math.abs(delayValue) > 1e-6 || samples !== 0;
+        alignBtn.classList.toggle('engaged', engaged);
+    }
 }
 
 function wireToggleParameter({ paramId, buttonId, activeClass = 'active' }) {
@@ -1480,7 +1712,7 @@ function wireToggleParameter({ paramId, buttonId, activeClass = 'active' }) {
 function wireMSMatrix() {
     debugLog("wireMSMatrix(): Inizializzazione controlli Mid/Side con toggle L/R...", "INFO");
 
-    const GAIN_RANGE_FALLBACK = { start: -60, end: 12, skew: 1 };
+    const GAIN_RANGE_FALLBACK = { start: -12, end: 12, skew: 1 };
 
     // Ottieni tutti e 4 i gain state upfront
     let ch1Ms, ch2Ms, ch1Lr, ch2Lr;
@@ -1536,13 +1768,13 @@ function wireMSMatrix() {
         const db = normToDb(ch.gainA);
         lb1.textContent = snapZero(db).toFixed(1) + ' dB';
         if (document.activeElement !== sl1)
-            sl1.value = gainDbToSliderPos(db, -60, 12).toFixed(4);
+            sl1.value = gainDbToSliderPos(db, -12, 12).toFixed(4);
     };
     const syncB = () => {
         const db = normToDb(ch.gainB);
         lb2.textContent = snapZero(db).toFixed(1) + ' dB';
         if (document.activeElement !== sl2)
-            sl2.value = gainDbToSliderPos(db, -60, 12).toFixed(4);
+            sl2.value = gainDbToSliderPos(db, -12, 12).toFixed(4);
     };
     const syncMuteA = () => {
         if (!ch.muteA) return;
@@ -1581,7 +1813,7 @@ function wireMSMatrix() {
     sl1.addEventListener('mouseup',   () => ch.gainA.sliderDragEnded());
     sl1.addEventListener('touchend',  () => ch.gainA.sliderDragEnded());
     sl1.addEventListener('input', () => {
-        const db = sliderPosToGainDb(parseFloat(sl1.value.replace(',', '.')), -60, 12);
+        const db = sliderPosToGainDb(parseFloat(sl1.value.replace(',', '.')), -12, 12);
         ch.gainA.setNormalisedValue(dbToNorm(db, ch.gainA));
         lb1.textContent = snapZero(db).toFixed(1) + ' dB';
     });
@@ -1589,6 +1821,11 @@ function wireMSMatrix() {
         e.preventDefault();
         ch.gainA.setNormalisedValue(dbToNorm(0, ch.gainA));
         syncA(); sl1.blur();
+    });
+    makeEditableLabel(lb1, -12, 12, (db) => {
+        ch.gainA.setNormalisedValue(dbToNorm(db, ch.gainA));
+        sl1.value = gainDbToSliderPos(db, -12, 12).toFixed(4);
+        lb1.textContent = snapZero(db).toFixed(1) + ' dB';
     });
 
     // Slider 2 (SIDE / RIGHT)
@@ -1598,7 +1835,7 @@ function wireMSMatrix() {
     sl2.addEventListener('mouseup',   () => ch.gainB.sliderDragEnded());
     sl2.addEventListener('touchend',  () => ch.gainB.sliderDragEnded());
     sl2.addEventListener('input', () => {
-        const db = sliderPosToGainDb(parseFloat(sl2.value.replace(',', '.')), -60, 12);
+        const db = sliderPosToGainDb(parseFloat(sl2.value.replace(',', '.')), -12, 12);
         ch.gainB.setNormalisedValue(dbToNorm(db, ch.gainB));
         lb2.textContent = snapZero(db).toFixed(1) + ' dB';
     });
@@ -1607,16 +1844,16 @@ function wireMSMatrix() {
         ch.gainB.setNormalisedValue(dbToNorm(0, ch.gainB));
         syncB(); sl2.blur();
     });
+    makeEditableLabel(lb2, -12, 12, (db) => {
+        ch.gainB.setNormalisedValue(dbToNorm(db, ch.gainB));
+        sl2.value = gainDbToSliderPos(db, -12, 12).toFixed(4);
+        lb2.textContent = snapZero(db).toFixed(1) + ' dB';
+    });
 
     // Mute buttons
     if (mu1) mu1.addEventListener('click', () => { if (ch.muteA) { ch.muteA.setValue(!ch.muteA.getValue()); syncMuteA(); } });
     if (mu2) mu2.addEventListener('click', () => { if (ch.muteB) { ch.muteB.setValue(!ch.muteB.getValue()); syncMuteB(); } });
 
-    // Toggle L/R ↔ M/S
-    // I due set di parametri sono indipendenti e cumulativi: il toggle non
-    // modifica alcun valore, cambia solo quale set gli slider mostrano e
-    // controllano. Un mid_gain a -6 dB continua ad agire sull'audio anche
-    // mentre gli slider sono in modalità L/R.
     let _lrActive = false;
     if (lrBtn) {
         lrBtn.addEventListener('click', () => {
@@ -1643,12 +1880,6 @@ function wireMSMatrix() {
         });
     }
 
-    // Reset una tantum dei gain a 0 dB (i WebSliderRelay partono da -60 dB).
-    // ATTENZIONE: setNormalisedValue converte il normalizzato in valore reale
-    // usando state.properties, che alla creazione vale {start: 0, end: 1} — i
-    // valori veri (-60..12) arrivano dal backend in modo asincrono. Resettare
-    // subito manderebbe al parametro "0.83 dB" invece di 0 dB, quindi il reset
-    // attende l'arrivo delle properties reali tramite propertiesChangedEvent.
     const resetGainOnce = (state) => {
         let done = false;
         const tryReset = () => {
