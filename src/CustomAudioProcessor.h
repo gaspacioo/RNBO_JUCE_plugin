@@ -60,6 +60,8 @@ public:
 
     float _specMagL[kSpecBands] = {};
     float _specMagR[kSpecBands] = {};
+    float _specMagMid[kSpecBands]  = {};
+    float _specMagSide[kSpecBands] = {};
     std::atomic<bool>     _specNewData { false };
     juce::CriticalSection _specLock;
 
@@ -79,6 +81,8 @@ private:
 
     float _fftRingL[kFftLowSize] = {};
     float _fftRingR[kFftLowSize] = {};
+    float _fftRingMid[kFftLowSize]  = {};
+    float _fftRingSide[kFftLowSize] = {};
     int   _fftRingPos    = 0;
     int   _fftHopCount   = 0;
     int   _fftLowHopCount = 0;

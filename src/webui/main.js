@@ -335,8 +335,16 @@ function resetSpectrum() {
     _specPeakR.fill(SPEC_FLOOR_DB - 1);
     _specPeakAgeL.fill(0);
     _specPeakAgeR.fill(0);
+    _specTargetMid.fill(SPEC_FLOOR_DB - 1);
+    _specTargetSide.fill(SPEC_FLOOR_DB - 1);
+    _specDrawMid.fill(SPEC_FLOOR_DB - 1);
+    _specDrawSide.fill(SPEC_FLOOR_DB - 1);
+    _specPeakMid.fill(SPEC_FLOOR_DB - 1);
+    _specPeakAgeMid.fill(0);
     _specAvgL.fill(0);
     _specAvgR.fill(0);
+    _specAvgMid.fill(0);
+    _specAvgSide.fill(0);
     _specAvgCount = 0;
 }
 
@@ -795,17 +803,61 @@ let _specPeakL    = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
 let _specPeakR    = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
 let _specPeakAgeL = new Uint16Array(SPEC_BANDS);  // frame dall'ultimo aggiornamento del peak
 let _specPeakAgeR = new Uint16Array(SPEC_BANDS);
+// Spettri Mid/Side (vista alternativa a L/R)
+let _specMsMode    = false;   // false = L/R, true = M/S
+let _specTargetMid  = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
+let _specTargetSide = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
+let _specDrawMid    = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
+let _specDrawSide   = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
+let _specPeakMid     = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
+let _specPeakAgeMid  = new Uint16Array(SPEC_BANDS);
+let _specSideT       = new Float32Array(SPEC_BANDS);   // ampiezza Side norm. per banda (linea)
 let _specPeakHold = false;
 let _specTiltOn   = false;
+// IQ panorama: bilanciamento stereo per banda (-1 = L, +1 = R), smussato nel tempo
+let _specIqOn = false;
+let _specBal      = new Float32Array(SPEC_BANDS);  // bilanciamento smussato nel tempo
+let _specBalDraw  = new Float32Array(SPEC_BANDS);  // dopo smoothing in frequenza
+let _specIqActive = new Uint8Array(SPEC_BANDS);    // 1 = banda sopra soglia
 // Media a lungo termine: media incrementale della potenza lineare per banda
 // (mediare in potenza, non in dB, dà il giusto peso ai passaggi forti)
 let _specAvgOn    = false;
 let _specAvgL     = new Float64Array(SPEC_BANDS);
 let _specAvgR     = new Float64Array(SPEC_BANDS);
+let _specAvgMid   = new Float64Array(SPEC_BANDS);
+let _specAvgSide  = new Float64Array(SPEC_BANDS);
 let _specAvgCount = 0;
 let _specTiltOffsets = null;  // offset dB per banda, precalcolati al primo uso
 let _specMouse    = null;     // {x, y} in coordinate canvas, null se fuori
 let _specColors  = null;
+let _specFreqColors = null;   // colore arcobaleno per banda (rosso=basse, viola=alte)
+
+function hslToRgbStr(h, s, l) {
+    s /= 100; l /= 100;
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = l - c / 2;
+    let r = 0, g = 0, b = 0;
+    if      (h < 60)  { r = c; g = x; }
+    else if (h < 120) { r = x; g = c; }
+    else if (h < 180) { g = c; b = x; }
+    else if (h < 240) { g = x; b = c; }
+    else if (h < 300) { r = x; b = c; }
+    else              { r = c; b = x; }
+    return `rgb(${Math.round((r + m) * 255)}, ${Math.round((g + m) * 255)}, ${Math.round((b + m) * 255)})`;
+}
+
+// Arcobaleno per frequenza: banda 0 (basse) = rosso → banda alta = viola
+function buildSpecFreqColors() {
+    _specFreqColors = new Array(SPEC_BANDS);
+    const HUE_LOW  = 0;     // rosso
+    const HUE_HIGH = 285;   // viola
+    for (let b = 0; b < SPEC_BANDS; b++) {
+        const t = b / (SPEC_BANDS - 1);
+        const hue = HUE_LOW + (HUE_HIGH - HUE_LOW) * t;
+        _specFreqColors[b] = hslToRgbStr(hue, 85, 55);
+    }
+}
 
 function buildSpecTiltOffsets() {
     _specTiltOffsets = new Float32Array(SPEC_BANDS);
@@ -886,6 +938,8 @@ function drawSpectrum() {
     if (!canvas) return;
     if (!_specColors) buildSpecPalette();
 
+    if (!_specFreqColors) buildSpecFreqColors();
+
     const ctx  = canvas.getContext('2d');
     const w    = _specW || canvas.width;
     const h    = _specH || canvas.height;
@@ -900,72 +954,169 @@ function drawSpectrum() {
     drawSpectrumGrid(ctx, w, h, midX);
 
     if (_specAvgOn && _specAvgCount > 0) {
-        drawSpectrumAvgSide(ctx, -1, midX, gap, halfW, h, rowH, dbRange);
-        drawSpectrumAvgSide(ctx, +1, midX, gap, halfW, h, rowH, dbRange);
+        const FILL       = { fill: 'rgba(194, 146, 68, 0.10)', stroke: 'rgba(194, 146, 68, 0.35)' };
+        const WHITE_FILL = { fill: 'rgba(255, 255, 255, 0.10)', stroke: 'rgba(255, 255, 255, 0.40)' };
+        if (!_specMsMode) {
+            drawSpectrumAvgSide(ctx, -1, _specAvgL, midX, gap, halfW, h, rowH, dbRange, FILL);
+            drawSpectrumAvgSide(ctx, +1, _specAvgR, midX, gap, halfW, h, rowH, dbRange, FILL);
+        } else {
+            // Media M/S: Mid riempimento dorato + Side riempimento bianco, entrambi simmetrici
+            drawSpectrumAvgSide(ctx, -1, _specAvgMid,  midX, gap, halfW, h, rowH, dbRange, FILL);
+            drawSpectrumAvgSide(ctx, +1, _specAvgMid,  midX, gap, halfW, h, rowH, dbRange, FILL);
+            drawSpectrumAvgSide(ctx, -1, _specAvgSide, midX, gap, halfW, h, rowH, dbRange, WHITE_FILL);
+            drawSpectrumAvgSide(ctx, +1, _specAvgSide, midX, gap, halfW, h, rowH, dbRange, WHITE_FILL);
+        }
     }
+
+    const norm = (db, tilt) => db <= SPEC_FLOOR_DB ? 0
+        : Math.min(1, Math.max(0, (db + tilt - _specDbMin) / dbRange));
 
     for (let b = 0; b < SPEC_BANDS; b++) {
-        const kL = _specTargetL[b] > _specDrawL[b] ? SPEC_ATTACK : SPEC_RELEASE;
-        const kR = _specTargetR[b] > _specDrawR[b] ? SPEC_ATTACK : SPEC_RELEASE;
-        _specDrawL[b] += (_specTargetL[b] - _specDrawL[b]) * kL;
-        _specDrawR[b] += (_specTargetR[b] - _specDrawR[b]) * kR;
+        // Smoothing temporale di tutte e 4 le serie (L/R servono anche all'overlay IQ)
+        _specDrawL[b]    += (_specTargetL[b]    - _specDrawL[b])    * (_specTargetL[b]    > _specDrawL[b]    ? SPEC_ATTACK : SPEC_RELEASE);
+        _specDrawR[b]    += (_specTargetR[b]    - _specDrawR[b])    * (_specTargetR[b]    > _specDrawR[b]    ? SPEC_ATTACK : SPEC_RELEASE);
+        _specDrawMid[b]  += (_specTargetMid[b]  - _specDrawMid[b])  * (_specTargetMid[b]  > _specDrawMid[b]  ? SPEC_ATTACK : SPEC_RELEASE);
+        _specDrawSide[b] += (_specTargetSide[b] - _specDrawSide[b]) * (_specTargetSide[b] > _specDrawSide[b] ? SPEC_ATTACK : SPEC_RELEASE);
 
-        // Tilt pinking: applicato solo alla visualizzazione, i valori restano in dBFS reali
         const tilt = _specTiltOn ? _specTiltOffsets[b] : 0;
-        const tL = _specDrawL[b] <= SPEC_FLOOR_DB ? 0
-            : Math.min(1, Math.max(0, (_specDrawL[b] + tilt - _specDbMin) / dbRange));
-        const tR = _specDrawR[b] <= SPEC_FLOOR_DB ? 0
-            : Math.min(1, Math.max(0, (_specDrawR[b] + tilt - _specDbMin) / dbRange));
-
-        // Banda 0 = 20 Hz in basso, banda 95 = 20 kHz in alto.
-        // Impulsi: righe sottili con 1px di stacco tra una banda e l'altra
         const y  = h - (b + 1) * rowH;
         const rh = Math.max(1, rowH - 1);
+        const bandColor = _specFreqColors[b];
 
-        // L: impulsi verso sinistra dalla linea centrale
-        if (tL > 0.003) {
-            const len = Math.max(1, tL * halfW);
-            ctx.fillStyle = _specColors[Math.round(tL * 100)];
-            ctx.fillRect(midX - gap - len, y, len, rh);
-        }
+        if (!_specMsMode) {
+            // ---- Vista L/R: L a sinistra, R a destra ----
+            const tL = norm(_specDrawL[b], tilt);
+            const tR = norm(_specDrawR[b], tilt);
+            if (tL > 0.003) { ctx.fillStyle = bandColor; ctx.fillRect(midX - gap - Math.max(1, tL * halfW), y, Math.max(1, tL * halfW), rh); }
+            if (tR > 0.003) { ctx.fillStyle = bandColor; ctx.fillRect(midX + gap, y, Math.max(1, tR * halfW), rh); }
 
-        // R: impulsi specchiati verso destra
-        if (tR > 0.003) {
-            const len = Math.max(1, tR * halfW);
-            ctx.fillStyle = _specColors[Math.round(tR * 100)];
-            ctx.fillRect(midX + gap, y, len, rh);
-        }
+            if (_specPeakHold) {
+                if (_specDrawL[b] >= _specPeakL[b]) { _specPeakL[b] = _specDrawL[b]; _specPeakAgeL[b] = 0; }
+                else { _specPeakAgeL[b]++; if (_specPeakAgeL[b] > SPEC_PEAK_HOLD_FRAMES) _specPeakL[b] = Math.max(_specPeakL[b] - SPEC_PEAK_DECAY, SPEC_FLOOR_DB - 1); }
+                if (_specDrawR[b] >= _specPeakR[b]) { _specPeakR[b] = _specDrawR[b]; _specPeakAgeR[b] = 0; }
+                else { _specPeakAgeR[b]++; if (_specPeakAgeR[b] > SPEC_PEAK_HOLD_FRAMES) _specPeakR[b] = Math.max(_specPeakR[b] - SPEC_PEAK_DECAY, SPEC_FLOOR_DB - 1); }
 
-        if (_specPeakHold) {
-            // Aggiorna i massimi: se il livello attuale supera il peak, resetta l'età.
-            // Solo dopo SPEC_PEAK_HOLD_FRAMES frame senza nuovi massimi inizia il decay.
-            if (_specDrawL[b] >= _specPeakL[b]) { _specPeakL[b] = _specDrawL[b]; _specPeakAgeL[b] = 0; }
-            else { _specPeakAgeL[b]++; if (_specPeakAgeL[b] > SPEC_PEAK_HOLD_FRAMES) _specPeakL[b] = Math.max(_specPeakL[b] - SPEC_PEAK_DECAY, SPEC_FLOOR_DB - 1); }
-            if (_specDrawR[b] >= _specPeakR[b]) { _specPeakR[b] = _specDrawR[b]; _specPeakAgeR[b] = 0; }
-            else { _specPeakAgeR[b]++; if (_specPeakAgeR[b] > SPEC_PEAK_HOLD_FRAMES) _specPeakR[b] = Math.max(_specPeakR[b] - SPEC_PEAK_DECAY, SPEC_FLOOR_DB - 1); }
+                const pL = norm(_specPeakL[b], tilt);
+                const pR = norm(_specPeakR[b], tilt);
+                ctx.fillStyle = 'rgba(255, 235, 170, 0.85)';
+                if (pL > 0.01) ctx.fillRect(midX - gap - pL * halfW, y, 1, rh);
+                if (pR > 0.01) ctx.fillRect(midX + gap + pR * halfW - 1, y, 1, rh);
+            }
+        } else {
+            // ---- Vista M/S: Mid riempito simmetrico + Side come linea sui due lati ----
+            const tMid  = norm(_specDrawMid[b],  tilt);
+            const tSide = norm(_specDrawSide[b], tilt);
 
-            const pL = _specPeakL[b] <= SPEC_FLOOR_DB ? 0
-                : Math.min(1, (_specPeakL[b] + tilt - _specDbMin) / dbRange);
-            const pR = _specPeakR[b] <= SPEC_FLOOR_DB ? 0
-                : Math.min(1, (_specPeakR[b] + tilt - _specDbMin) / dbRange);
-            ctx.fillStyle = 'rgba(255, 235, 170, 0.85)';
-            if (pL > 0.01) ctx.fillRect(midX - gap - pL * halfW, y, 1, rh);
-            if (pR > 0.01) ctx.fillRect(midX + gap + pR * halfW - 1, y, 1, rh);
+            // Mid: area piena arcobaleno, specchiata su entrambi i lati del centro
+            if (tMid > 0.003) {
+                const len = Math.max(1, tMid * halfW);
+                ctx.fillStyle = bandColor;
+                ctx.fillRect(midX - gap - len, y, len, rh);
+                ctx.fillRect(midX + gap, y, len, rh);
+            }
+
+            // Side: memorizza l'ampiezza, la linea continua si disegna dopo il loop
+            _specSideT[b] = tSide;
+
+            // Peak hold sul Mid (tick tenue, simmetrico)
+            if (_specPeakHold) {
+                if (_specDrawMid[b] >= _specPeakMid[b]) { _specPeakMid[b] = _specDrawMid[b]; _specPeakAgeMid[b] = 0; }
+                else { _specPeakAgeMid[b]++; if (_specPeakAgeMid[b] > SPEC_PEAK_HOLD_FRAMES) _specPeakMid[b] = Math.max(_specPeakMid[b] - SPEC_PEAK_DECAY, SPEC_FLOOR_DB - 1); }
+
+                const pM = norm(_specPeakMid[b], tilt);
+                if (pM > 0.01) {
+                    ctx.fillStyle = 'rgba(255, 235, 170, 0.85)';
+                    ctx.fillRect(midX - gap - pM * halfW, y, 1, rh);
+                    ctx.fillRect(midX + gap + pM * halfW - 1, y, 1, rh);
+                }
+            }
         }
     }
+
+    // --- Side come linea continua bianca su entrambi i lati (solo M/S) ---
+    if (_specMsMode) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.lineWidth = 1.2;
+        ctx.lineJoin = 'round';
+        for (const sideSign of [-1, +1]) {
+            ctx.beginPath();
+            for (let b = 0; b < SPEC_BANDS; b++) {
+                const x = midX + sideSign * (gap + _specSideT[b] * halfW);
+                const y = h - (b + 0.5) * rowH;
+                b === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+    }
+
+    // --- Overlay IQ: panorama stereo dell'energia per banda (barre bianche) ---
+    if (_specIqOn) drawSpecIq(ctx, midX, halfW, h, rowH);
 
     if (_specMouse) drawSpectrumReadout(ctx, w, h, midX);
 
     requestAnimationFrame(drawSpectrum);
 }
 
-// Sagoma della media a lungo termine per un lato (side: -1 = L, +1 = R)
-function drawSpectrumAvgSide(ctx, side, midX, gap, halfW, h, rowH, dbRange) {
+// Overlay "IQ": per ogni banda mostra dove si concentra l'energia nel panorama
+// stereo. Posizione = bilanciamento RMS L/R della banda; soglia per nascondere
+// le bande sotto il floor di visualizzazione.
+const SPEC_IQ_SMOOTH = 0.30;   // smoothing temporale per banda
+const SPEC_IQ_SCALE  = 0.33;   // lunghezza max della barra come frazione di halfW
+const SPEC_IQ_FREQ_R = 2;      // raggio finestra smoothing in frequenza (±bande)
+function drawSpecIq(ctx, midX, halfW, h, rowH) {
+    // Fase 1: bilanciamento per banda con smoothing temporale (target 0 = centro
+    // per le bande sotto soglia, così decadono dolcemente verso il centro)
+    for (let b = 0; b < SPEC_BANDS; b++) {
+        const dbL = _specDrawL[b];
+        const dbR = _specDrawR[b];
+        const loud = Math.max(dbL, dbR);
+        const active = loud > SPEC_FLOOR_DB && loud >= _specDbMin;
+        _specIqActive[b] = active ? 1 : 0;
+
+        let target = 0;
+        if (active) {
+            const pL = Math.pow(10, dbL / 10);
+            const pR = Math.pow(10, dbR / 10);
+            const sum = pL + pR;
+            target = sum > 1e-20 ? (pR - pL) / sum : 0;   // -1 (L) .. +1 (R)
+        }
+        _specBal[b] += (target - _specBal[b]) * SPEC_IQ_SMOOTH;
+    }
+
+    // Fase 2: smoothing in frequenza (media triangolare su ±SPEC_IQ_FREQ_R bande)
+    for (let b = 0; b < SPEC_BANDS; b++) {
+        let acc = 0, wsum = 0;
+        for (let d = -SPEC_IQ_FREQ_R; d <= SPEC_IQ_FREQ_R; d++) {
+            const i = b + d;
+            if (i < 0 || i >= SPEC_BANDS) continue;
+            const w = SPEC_IQ_FREQ_R + 1 - Math.abs(d);   // peso triangolare
+            acc += _specBal[i] * w;
+            wsum += w;
+        }
+        _specBalDraw[b] = wsum > 0 ? acc / wsum : _specBal[b];
+    }
+
+    // Fase 3: disegno. Barra dal centro verso il lato dominante, solo bande attive.
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+    const rh = Math.max(1, rowH);
+    for (let b = 0; b < SPEC_BANDS; b++) {
+        if (!_specIqActive[b]) continue;
+        const len = _specBalDraw[b] * halfW * SPEC_IQ_SCALE;
+        const y = h - (b + 1) * rowH;
+        if (len >= 0) ctx.fillRect(midX, y, len, rh);
+        else          ctx.fillRect(midX + len, y, -len, rh);
+    }
+}
+
+// Sagoma della media a lungo termine per un lato.
+// side: -1 = sinistra, +1 = destra; data = array di potenze medie per banda;
+// style: { fill, stroke } (fill null = solo profilo a linea).
+function drawSpectrumAvgSide(ctx, side, data, midX, gap, halfW, h, rowH, dbRange, style) {
     const xs = new Float32Array(SPEC_BANDS);
     const ys = new Float32Array(SPEC_BANDS);
 
     for (let b = 0; b < SPEC_BANDS; b++) {
-        const mean = side < 0 ? _specAvgL[b] : _specAvgR[b];
+        const mean = data[b];
         const db   = mean > 1e-12 ? 10 * Math.log10(mean) : -Infinity;
         const tilt = _specTiltOn ? _specTiltOffsets[b] : 0;
         const t    = db <= SPEC_FLOOR_DB ? 0
@@ -974,22 +1125,26 @@ function drawSpectrumAvgSide(ctx, side, midX, gap, halfW, h, rowH, dbRange) {
         ys[b] = h - (b + 0.5) * rowH;
     }
 
-    // Riempimento tenue chiuso sulla linea centrale
-    ctx.beginPath();
-    ctx.moveTo(midX + side * gap, ys[0]);
-    for (let b = 0; b < SPEC_BANDS; b++) ctx.lineTo(xs[b], ys[b]);
-    ctx.lineTo(midX + side * gap, ys[SPEC_BANDS - 1]);
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(194, 146, 68, 0.10)';
-    ctx.fill();
+    // Riempimento tenue chiuso sulla linea centrale (opzionale)
+    if (style.fill) {
+        ctx.beginPath();
+        ctx.moveTo(midX + side * gap, ys[0]);
+        for (let b = 0; b < SPEC_BANDS; b++) ctx.lineTo(xs[b], ys[b]);
+        ctx.lineTo(midX + side * gap, ys[SPEC_BANDS - 1]);
+        ctx.closePath();
+        ctx.fillStyle = style.fill;
+        ctx.fill();
+    }
 
     // Profilo sottile della curva
-    ctx.beginPath();
-    for (let b = 0; b < SPEC_BANDS; b++)
-        b === 0 ? ctx.moveTo(xs[b], ys[b]) : ctx.lineTo(xs[b], ys[b]);
-    ctx.strokeStyle = 'rgba(194, 146, 68, 0.35)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    if (style.stroke) {
+        ctx.beginPath();
+        for (let b = 0; b < SPEC_BANDS; b++)
+            b === 0 ? ctx.moveTo(xs[b], ys[b]) : ctx.lineTo(xs[b], ys[b]);
+        ctx.strokeStyle = style.stroke;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
 }
 
 const SPEC_NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -1015,7 +1170,15 @@ function drawSpectrumReadout(ctx, w, h, midX) {
     // Canale dal lato del cursore, dB dalla banda sotto il cursore
     const band = Math.min(SPEC_BANDS - 1, Math.max(0, Math.floor(frac * SPEC_BANDS)));
     const isLeft = x < midX;
-    const db = isLeft ? _specDrawL[band] : _specDrawR[band];
+    let chLabel, db;
+    if (_specMsMode) {
+        // Mid è simmetrico su entrambi i lati; Side è il contorno sui lati
+        chLabel = 'M';
+        db = _specDrawMid[band];
+    } else {
+        chLabel = isLeft ? 'L' : 'R';
+        db = isLeft ? _specDrawL[band] : _specDrawR[band];
+    }
     const dbTxt = db <= SPEC_FLOOR_DB ? '−∞' : db.toFixed(1) + ' dB';
 
     // Linea orizzontale di tracking sul cursore
@@ -1025,7 +1188,7 @@ function drawSpectrumReadout(ctx, w, h, midX) {
     ctx.moveTo(0, y); ctx.lineTo(w, y);
     ctx.stroke();
 
-    const text = `${isLeft ? 'L' : 'R'}  ${formatSpecFreq(freq)}  ${freqToNoteName(freq)}  ${dbTxt}`;
+    const text = `${chLabel}  ${formatSpecFreq(freq)}  ${freqToNoteName(freq)}  ${dbTxt}`;
 
     ctx.font = 'bold 8px monospace';
     ctx.textAlign = 'right';
@@ -1059,6 +1222,8 @@ function setupSpectrumControls() {
             _specPeakR.fill(SPEC_FLOOR_DB - 1);
             _specPeakAgeL.fill(0);
             _specPeakAgeR.fill(0);
+            _specPeakMid.fill(SPEC_FLOOR_DB - 1);
+            _specPeakAgeMid.fill(0);
         }
         saveUiState({ specPeak: _specPeakHold });
     });
@@ -1084,9 +1249,30 @@ function setupSpectrumControls() {
             // Spegnere il toggle azzera l'accumulo: alla riattivazione si riparte da zero
             _specAvgL.fill(0);
             _specAvgR.fill(0);
+            _specAvgMid.fill(0);
+            _specAvgSide.fill(0);
             _specAvgCount = 0;
         }
         saveUiState({ specAvg: _specAvgOn });
+    });
+
+    const btnIq = document.getElementById('specIqToggle');
+    _specIqOn = saved.specIq === true;
+    btnIq.style.opacity = _specIqOn ? '1' : '0.35';
+    btnIq.addEventListener('click', () => {
+        _specIqOn = !_specIqOn;
+        btnIq.style.opacity = _specIqOn ? '1' : '0.35';
+        if (!_specIqOn) _specBal.fill(0);   // reset al centro alla disattivazione
+        saveUiState({ specIq: _specIqOn });
+    });
+
+    const btnMs = document.getElementById('specMsToggle');
+    _specMsMode = saved.specMs === true;
+    btnMs.style.opacity = _specMsMode ? '1' : '0.35';
+    btnMs.addEventListener('click', () => {
+        _specMsMode = !_specMsMode;
+        btnMs.style.opacity = _specMsMode ? '1' : '0.35';
+        saveUiState({ specMs: _specMsMode });
     });
 
     const btnRange = document.getElementById('specRangeToggle');
@@ -1993,14 +2179,27 @@ function wireMeters() {
                     _specTargetL[b] = data.specL[b];
                     _specTargetR[b] = data.specR[b];
                 }
+                if (data.specMid && data.specMid.length === SPEC_BANDS) {
+                    for (let b = 0; b < SPEC_BANDS; b++) {
+                        _specTargetMid[b]  = data.specMid[b];
+                        _specTargetSide[b] = data.specSide[b];
+                    }
+                }
 
                 if (_specAvgOn) {
                     _specAvgCount++;
+                    const hasMs = data.specMid && data.specMid.length === SPEC_BANDS;
                     for (let b = 0; b < SPEC_BANDS; b++) {
                         const pL = Math.pow(10, data.specL[b] / 10);
                         const pR = Math.pow(10, data.specR[b] / 10);
                         _specAvgL[b] += (pL - _specAvgL[b]) / _specAvgCount;
                         _specAvgR[b] += (pR - _specAvgR[b]) / _specAvgCount;
+                        if (hasMs) {
+                            const pM = Math.pow(10, data.specMid[b]  / 10);
+                            const pS = Math.pow(10, data.specSide[b] / 10);
+                            _specAvgMid[b]  += (pM - _specAvgMid[b])  / _specAvgCount;
+                            _specAvgSide[b] += (pS - _specAvgSide[b]) / _specAvgCount;
+                        }
                     }
                 }
             }

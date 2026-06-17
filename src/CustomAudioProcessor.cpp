@@ -107,14 +107,21 @@ void CustomAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     meterLevels.outPeakL.store (kSilenceDb, std::memory_order_relaxed);
     meterLevels.outPeakR.store (kSilenceDb, std::memory_order_relaxed);
 
-    // --- Spettro: finestre di Hann + mappatura bande logaritmiche ---
+    // --- Spettro: finestre Blackman-Harris (4 termini) + mappatura bande log ---
+    // Lobi laterali ~-92 dB: molto meno leakage spettrale rispetto a Hann (-31 dB),
+    // così un tono puro non "sbava" sulle frequenze vicine.
+    auto blackmanHarris = [] (int i, int n)
+    {
+        constexpr float a0 = 0.35875f, a1 = 0.48829f, a2 = 0.14128f, a3 = 0.01168f;
+        const float t = 2.0f * juce::MathConstants<float>::pi * (float) i / (float) (n - 1);
+        return a0 - a1 * std::cos (t) + a2 * std::cos (2.0f * t) - a3 * std::cos (3.0f * t);
+    };
+
     for (int i = 0; i < kFftSize; ++i)
-        _hannWindow[i] = 0.5f * (1.0f - std::cos (2.0f * juce::MathConstants<float>::pi
-                                                       * (float) i / (float) (kFftSize - 1)));
+        _hannWindow[i] = blackmanHarris (i, kFftSize);
 
     for (int i = 0; i < kFftLowSize; ++i)
-        _hannWindowLow[i] = 0.5f * (1.0f - std::cos (2.0f * juce::MathConstants<float>::pi
-                                                          * (float) i / (float) (kFftLowSize - 1)));
+        _hannWindowLow[i] = blackmanHarris (i, kFftLowSize);
 
     const float nyquist = sr * 0.5f;
     const float fMin    = 20.0f;
@@ -146,8 +153,12 @@ void CustomAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     _fftLowHopCount = 0;
     std::fill (std::begin (_fftRingL), std::end (_fftRingL), 0.0f);
     std::fill (std::begin (_fftRingR), std::end (_fftRingR), 0.0f);
+    std::fill (std::begin (_fftRingMid),  std::end (_fftRingMid),  0.0f);
+    std::fill (std::begin (_fftRingSide), std::end (_fftRingSide), 0.0f);
     std::fill (std::begin (_specMagL), std::end (_specMagL), kSilenceDb);
     std::fill (std::begin (_specMagR), std::end (_specMagR), kSilenceDb);
+    std::fill (std::begin (_specMagMid),  std::end (_specMagMid),  kSilenceDb);
+    std::fill (std::begin (_specMagSide), std::end (_specMagSide), kSilenceDb);
 }
 
 void CustomAudioProcessor::measurePeaks (const juce::AudioBuffer<float>& buffer, bool isOutput)
@@ -223,10 +234,16 @@ void CustomAudioProcessor::feedSpectrum (const juce::AudioBuffer<float>& buffer)
     const auto* chL = buffer.getReadPointer (0);
     const auto* chR = numChannels > 1 ? buffer.getReadPointer (1) : chL;
 
+    constexpr float msScale = 0.70710678f;   // 1/sqrt(2): codifica M/S a energia costante
+
     for (int i = 0; i < numSamples; ++i)
     {
-        _fftRingL[_fftRingPos] = chL[i];
-        _fftRingR[_fftRingPos] = chR[i];
+        const float l = chL[i];
+        const float r = chR[i];
+        _fftRingL[_fftRingPos]    = l;
+        _fftRingR[_fftRingPos]    = r;
+        _fftRingMid[_fftRingPos]  = (l + r) * msScale;
+        _fftRingSide[_fftRingPos] = (l - r) * msScale;
         _fftRingPos = (_fftRingPos + 1) & (kFftLowSize - 1);
 
         if (++_fftHopCount >= kFftHop)
@@ -247,19 +264,23 @@ void CustomAudioProcessor::computeSpectrumFrame (bool lowBands)
 {
     float newMagL[kSpecBands];
     float newMagR[kSpecBands];
+    float newMagMid[kSpecBands];
+    float newMagSide[kSpecBands];
 
     auto&       fft     = lowBands ? _fftLow        : _fft;
     const auto* window  = lowBands ? _hannWindowLow : _hannWindow;
     const int   fftLen  = lowBands ? kFftLowSize    : kFftSize;
 
-    const float magScale = 4.0f / (float) fftLen;
+    // Normalizzazione ampiezza: 2 / (guadagno coerente finestra · N).
+    // Blackman-Harris ha guadagno coerente a0 = 0.35875 (Hann era 0.5).
+    const float magScale = 2.0f / (0.35875f * (float) fftLen);
 
     const int ringOffset = _fftRingPos + kFftLowSize - fftLen;
 
-    const float* rings[2]   = { _fftRingL, _fftRingR };
-    float*       results[2] = { newMagL,   newMagR   };
+    const float* rings[4]   = { _fftRingL, _fftRingR, _fftRingMid, _fftRingSide };
+    float*       results[4] = { newMagL,   newMagR,   newMagMid,   newMagSide   };
 
-    for (int ch = 0; ch < 2; ++ch)
+    for (int ch = 0; ch < 4; ++ch)
     {
         for (int k = 0; k < fftLen; ++k)
             _fftWorkBuf[k] = rings[ch][(ringOffset + k) & (kFftLowSize - 1)] * window[k];
@@ -299,6 +320,8 @@ void CustomAudioProcessor::computeSpectrumFrame (bool lowBands)
 
             _specMagL[b] = alpha * _specMagL[b] + (1.0f - alpha) * newMagL[b];
             _specMagR[b] = alpha * _specMagR[b] + (1.0f - alpha) * newMagR[b];
+            _specMagMid[b]  = alpha * _specMagMid[b]  + (1.0f - alpha) * newMagMid[b];
+            _specMagSide[b] = alpha * _specMagSide[b] + (1.0f - alpha) * newMagSide[b];
         }
 
         _specNewData.store (true, std::memory_order_release);

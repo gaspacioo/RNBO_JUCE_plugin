@@ -216,9 +216,11 @@ void WebBrowserAudioEditor::sendMeterLevelsToWebView()
         {
             constexpr int numBands = CustomAudioProcessor::kSpecBands;
 
-            juce::Array<juce::var> bandsL, bandsR;
+            juce::Array<juce::var> bandsL, bandsR, bandsMid, bandsSide;
             bandsL.ensureStorageAllocated (numBands);
             bandsR.ensureStorageAllocated (numBands);
+            bandsMid.ensureStorageAllocated (numBands);
+            bandsSide.ensureStorageAllocated (numBands);
 
             {
                 const juce::ScopedLock lock (_audioProcessor->_specLock);
@@ -228,11 +230,15 @@ void WebBrowserAudioEditor::sendMeterLevelsToWebView()
                 {
                     bandsL.add (_audioProcessor->_specMagL[b]);
                     bandsR.add (_audioProcessor->_specMagR[b]);
+                    bandsMid.add (_audioProcessor->_specMagMid[b]);
+                    bandsSide.add (_audioProcessor->_specMagSide[b]);
                 }
             }
 
             payload->setProperty ("specL", juce::var (bandsL));
             payload->setProperty ("specR", juce::var (bandsR));
+            payload->setProperty ("specMid",  juce::var (bandsMid));
+            payload->setProperty ("specSide", juce::var (bandsSide));
         }
     }
 
