@@ -159,6 +159,170 @@ void CustomAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     std::fill (std::begin (_specMagR), std::end (_specMagR), kSilenceDb);
     std::fill (std::begin (_specMagMid),  std::end (_specMagMid),  kSilenceDb);
     std::fill (std::begin (_specMagSide), std::end (_specMagSide), kSilenceDb);
+
+    prepareLufs (sampleRate);
+}
+
+//==============================================================================
+// LUFS – ITU-R BS.1770: filtro K (shelf + high-pass), mean-square, gating.
+// I coefficienti dei biquad sono ricalcolati analiticamente al sample rate
+// corrente (a 48 kHz coincidono con la Tabella 1/2 del BS.1770).
+void CustomAudioProcessor::prepareLufs (double sampleRate)
+{
+    const double fs = sampleRate > 0.0 ? sampleRate : 48000.0;
+
+    // Stadio 1: shelving "testa" (+~4 dB sopra ~1.5 kHz)
+    {
+        const double f0 = 1681.974450955533;
+        const double G  = 3.999843853973347;
+        const double Q  = 0.7071752369554196;
+        const double K  = std::tan (juce::MathConstants<double>::pi * f0 / fs);
+        const double Vh = std::pow (10.0, G / 20.0);
+        const double Vb = std::pow (Vh, 0.4996667741545416);
+        const double a0 = 1.0 + K / Q + K * K;
+        _kStage1.b0 = (Vh + Vb * K / Q + K * K) / a0;
+        _kStage1.b1 = 2.0 * (K * K - Vh) / a0;
+        _kStage1.b2 = (Vh - Vb * K / Q + K * K) / a0;
+        _kStage1.a1 = 2.0 * (K * K - 1.0) / a0;
+        _kStage1.a2 = (1.0 - K / Q + K * K) / a0;
+    }
+    // Stadio 2: high-pass RLB (~38 Hz)
+    {
+        const double f0 = 38.13547087602444;
+        const double Q  = 0.5003270373238773;
+        const double K  = std::tan (juce::MathConstants<double>::pi * f0 / fs);
+        const double a0 = 1.0 + K / Q + K * K;
+        _kStage2.b0 = 1.0;
+        _kStage2.b1 = -2.0;
+        _kStage2.b2 = 1.0;
+        _kStage2.a1 = 2.0 * (K * K - 1.0) / a0;
+        _kStage2.a2 = (1.0 - K / Q + K * K) / a0;
+    }
+
+    for (auto& s : _kS1) s = {};
+    for (auto& s : _kS2) s = {};
+
+    _lufsSubLen   = std::max (1, static_cast<int> (std::round (fs * 0.1)));   // 100 ms
+    _lufsSubSumL  = _lufsSubSumR = 0.0;
+    _lufsSubCount = 0;
+    std::fill (std::begin (_lufsBlockL), std::end (_lufsBlockL), 0.0);
+    std::fill (std::begin (_lufsBlockR), std::end (_lufsBlockR), 0.0);
+    _lufsBlockPos = _lufsBlockFilled = 0;
+    std::fill (std::begin (_lufsHist), std::end (_lufsHist), 0);
+
+    meterLevels.lufsMomentary.store  (-100.f, std::memory_order_relaxed);
+    meterLevels.lufsShortTerm.store  (-100.f, std::memory_order_relaxed);
+    meterLevels.lufsIntegrated.store (-100.f, std::memory_order_relaxed);
+}
+
+void CustomAudioProcessor::resetLufsIntegrated()
+{
+    // Azzera solo l'istogramma dell'Integrated (M e S restano scorrevoli)
+    std::fill (std::begin (_lufsHist), std::end (_lufsHist), 0);
+    meterLevels.lufsIntegrated.store (-100.f, std::memory_order_relaxed);
+}
+
+void CustomAudioProcessor::feedLufs (const juce::AudioBuffer<float>& buffer)
+{
+    const int numSamples  = buffer.getNumSamples();
+    const int numChannels = buffer.getNumChannels();
+    if (numChannels <= 0 || numSamples <= 0)
+        return;
+
+    const auto* chL = buffer.getReadPointer (0);
+    const auto* chR = numChannels > 1 ? buffer.getReadPointer (1) : chL;
+
+    auto applyBiquad = [] (const Biquad& c, BiquadState& s, double x)
+    {
+        const double y = c.b0 * x + c.b1 * s.x1 + c.b2 * s.x2 - c.a1 * s.y1 - c.a2 * s.y2;
+        s.x2 = s.x1; s.x1 = x;
+        s.y2 = s.y1; s.y1 = y;
+        return y;
+    };
+
+    for (int i = 0; i < numSamples; ++i)
+    {
+        const double yL = applyBiquad (_kStage2, _kS2[0], applyBiquad (_kStage1, _kS1[0], (double) chL[i]));
+        const double yR = applyBiquad (_kStage2, _kS2[1], applyBiquad (_kStage1, _kS1[1], (double) chR[i]));
+
+        _lufsSubSumL += yL * yL;
+        _lufsSubSumR += yR * yR;
+
+        if (++_lufsSubCount >= _lufsSubLen)
+            pushLufsSubBlock();
+    }
+}
+
+void CustomAudioProcessor::pushLufsSubBlock()
+{
+    // Mean-square del sotto-blocco da 100 ms, per canale
+    const double msL = _lufsSubSumL / (double) _lufsSubCount;
+    const double msR = _lufsSubSumR / (double) _lufsSubCount;
+    _lufsSubSumL = _lufsSubSumR = 0.0;
+    _lufsSubCount = 0;
+
+    _lufsBlockL[_lufsBlockPos] = msL;
+    _lufsBlockR[_lufsBlockPos] = msR;
+    _lufsBlockPos = (_lufsBlockPos + 1) % kLufsMaxBlocks;
+    if (_lufsBlockFilled < kLufsMaxBlocks) ++_lufsBlockFilled;
+
+    // Media degli ultimi n sotto-blocchi (per canale) → loudness
+    auto meanLoudness = [this] (int nBlocks) -> double
+    {
+        if (_lufsBlockFilled < nBlocks) return -1000.0;
+        double sumL = 0.0, sumR = 0.0;
+        for (int k = 1; k <= nBlocks; ++k)
+        {
+            const int idx = (_lufsBlockPos - k + kLufsMaxBlocks) % kLufsMaxBlocks;
+            sumL += _lufsBlockL[idx];
+            sumR += _lufsBlockR[idx];
+        }
+        const double z = (sumL + sumR) / (double) nBlocks;   // G_L=G_R=1
+        return z > 1e-12 ? -0.691 + 10.0 * std::log10 (z) : -1000.0;
+    };
+
+    // Momentary = 400 ms (4 blocchi), Short-term = 3 s (30 blocchi)
+    const double m = meanLoudness (4);
+    const double s = meanLoudness (30);
+    meterLevels.lufsMomentary.store (m <= -1000.0 ? -100.f : (float) m, std::memory_order_relaxed);
+    meterLevels.lufsShortTerm.store (s <= -1000.0 ? -100.f : (float) s, std::memory_order_relaxed);
+
+    // Gating block dell'Integrated = 400 ms (4 blocchi), nuovo ogni 100 ms (75% overlap)
+    if (_lufsBlockFilled >= 4)
+    {
+        const double lj = m;   // loudness del gating block da 400 ms
+        if (lj > kLufsHistMin)   // gate assoluto -70 LUFS
+        {
+            int bin = (int) std::floor ((lj - kLufsHistMin) / kLufsHistStep);
+            bin = juce::jlimit (0, kLufsHistBins - 1, bin);
+            ++_lufsHist[bin];
+            updateLufsIntegrated();
+        }
+    }
+}
+
+void CustomAudioProcessor::updateLufsIntegrated()
+{
+    auto binLoudness = [] (int bin) { return kLufsHistMin + (bin + 0.5) * kLufsHistStep; };
+    auto binZ        = [] (double l) { return std::pow (10.0, (l + 0.691) / 10.0); };
+
+    // Passo 1: media (gated solo dal -70 assoluto) → soglia relativa = media - 10 LU
+    double sumZ = 0.0; long long n = 0;
+    for (int b = 0; b < kLufsHistBins; ++b)
+        if (_lufsHist[b] > 0) { sumZ += _lufsHist[b] * binZ (binLoudness (b)); n += _lufsHist[b]; }
+
+    if (n == 0) { meterLevels.lufsIntegrated.store (-100.f, std::memory_order_relaxed); return; }
+
+    const double relGate = -0.691 + 10.0 * std::log10 (sumZ / (double) n) - 10.0;
+
+    // Passo 2: media dei blocchi sopra la soglia relativa
+    double sumZ2 = 0.0; long long n2 = 0;
+    for (int b = 0; b < kLufsHistBins; ++b)
+        if (_lufsHist[b] > 0 && binLoudness (b) > relGate)
+        { sumZ2 += _lufsHist[b] * binZ (binLoudness (b)); n2 += _lufsHist[b]; }
+
+    const double integrated = n2 > 0 ? -0.691 + 10.0 * std::log10 (sumZ2 / (double) n2) : -100.0;
+    meterLevels.lufsIntegrated.store ((float) integrated, std::memory_order_relaxed);
 }
 
 void CustomAudioProcessor::measurePeaks (const juce::AudioBuffer<float>& buffer, bool isOutput)
@@ -338,6 +502,7 @@ void CustomAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     measurePeaks (buffer, true);
     fillScopeFifo (buffer);
     feedSpectrum (buffer);
+    feedLufs (buffer);
 }
 
 void CustomAudioProcessor::handleMessageEvent (const RNBO::MessageEvent& event)

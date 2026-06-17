@@ -319,9 +319,48 @@ function initOutputStats() {
             resetSpectrum();
             resetVectorscope();
 
+            // L'Integrated LUFS si azzera solo qui (lato C++ via native function)
+            if (_resetLufsNative) { try { _resetLufsNative(); } catch (err) {} }
+            _lufsLatest[2] = -Infinity;
+            updateLufsUI();
+
             updateOutputStatsUI();
             debugLog('✓ Output Stats Reset', 'SUCCESS');
         });
+    }
+}
+
+// ===== LUFS (Momentary / Short-term / Integrated) =====
+const _LUFS_MODES = ['M', 'S', 'I'];
+let _lufsMode = 0;                              // 0=M, 1=S, 2=I
+let _lufsLatest = [-Infinity, -Infinity, -Infinity];
+let _resetLufsNative = null;
+
+function setupLufs() {
+    try { _resetLufsNative = Juce.getNativeFunction('resetLufs'); }
+    catch (e) { _resetLufsNative = null; }
+
+    const box = document.getElementById('lufsBox');
+    if (box) box.addEventListener('click', () => {
+        _lufsMode = (_lufsMode + 1) % _LUFS_MODES.length;
+        updateLufsUI();
+    });
+    updateLufsUI();
+}
+
+function updateLufsUI(data) {
+    if (data) {
+        if (data.lufsM !== undefined) _lufsLatest[0] = data.lufsM;
+        if (data.lufsS !== undefined) _lufsLatest[1] = data.lufsS;
+        if (data.lufsI !== undefined) _lufsLatest[2] = data.lufsI;
+    }
+    const label = document.getElementById('lufsLabel');
+    const val   = document.getElementById('lufsValue');
+    if (label) label.textContent = 'LUFS ' + _LUFS_MODES[_lufsMode];
+    if (val) {
+        const v = _lufsLatest[_lufsMode];
+        // -100 è il sentinella "nessuna misura"; sotto -70 (gate) mostro −∞
+        val.textContent = (!Number.isFinite(v) || v <= -99) ? '−∞' : v.toFixed(1);
     }
 }
 
@@ -2164,6 +2203,7 @@ function wireMeters() {
             }
             processOutputStats(data.outPeakL, data.outPeakR, data.outL, data.outR);
             updateOutputStatsUI();
+            updateLufsUI(data);
 
             if (data.correlationValue !== undefined) {
                 updateCorrelationUI(data.correlationValue);
@@ -2295,6 +2335,7 @@ function init() {
     wireMSMatrix();
     wireMeters();
     initOutputStats();
+    setupLufs();
 
     wireWindowResize();
 
@@ -2326,6 +2367,7 @@ async function initAsync() {
     wireMSMatrix();
     wireMeters();
     initOutputStats();
+    setupLufs();
 
     wireWindowResize();
 

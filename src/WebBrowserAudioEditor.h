@@ -74,6 +74,10 @@ private:
                 }
                 completion (juce::var());
             })
+            .withNativeFunction("resetLufs", [this] (const juce::Array<juce::var>&, juce::WebBrowserComponent::NativeFunctionCompletion completion) {
+                _audioProcessor->resetLufsIntegrated();
+                completion (juce::var());
+            })
             .withOptionsFrom (_gainRelay)
             .withOptionsFrom (_tempRelay)
             .withOptionsFrom (_distRelay)

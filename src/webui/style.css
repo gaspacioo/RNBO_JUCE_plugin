@@ -314,6 +314,16 @@ body {
     flex: 1 1 0;
 }
 
+/* Box cliccabile (LUFS: cicla M/S/I) */
+.stats-box-click {
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+}
+
+.stats-box-click:hover {
+    border-color: rgba(194, 146, 68, 0.6);
+}
+
 .stats-box {
     background: #121212;
     border: 1px solid #1a1a1a;

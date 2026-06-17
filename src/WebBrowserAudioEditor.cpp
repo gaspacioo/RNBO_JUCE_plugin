@@ -179,6 +179,9 @@ void WebBrowserAudioEditor::sendMeterLevelsToWebView()
     payload->setProperty ("outPeakL",  levels.outPeakL.load (std::memory_order_relaxed));
     payload->setProperty ("outPeakR",  levels.outPeakR.load (std::memory_order_relaxed));
     payload->setProperty ("delayTime", levels.delayTime.load (std::memory_order_relaxed));
+    payload->setProperty ("lufsM", levels.lufsMomentary.load  (std::memory_order_relaxed));
+    payload->setProperty ("lufsS", levels.lufsShortTerm.load  (std::memory_order_relaxed));
+    payload->setProperty ("lufsI", levels.lufsIntegrated.load (std::memory_order_relaxed));
     payload->setProperty ("sampleRate", _audioProcessor->getSampleRate());
     payload->setProperty ("correlationValue", levels.correlationValue.load (std::memory_order_relaxed));
 
