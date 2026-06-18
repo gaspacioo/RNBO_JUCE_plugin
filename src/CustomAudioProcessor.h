@@ -62,14 +62,22 @@ public:
     float _scopeBufY[kScopeBufferSize] = {};
 
     static constexpr int kFftOrder    = 11;
-    static constexpr int kFftSize     = 1 << kFftOrder;
+    static constexpr int kFftSize     = 1 << kFftOrder;     // 2048 pt @ full rate (medie/alte)
     static constexpr int kFftHop      = kFftSize / 2;
-    static constexpr int kFftLowOrder = 14;                 // 16384 pt → ~2.7 Hz/bin a 44100 Hz
+    // Path basse: il segnale viene filtrato (anti-alias) e decimato di kSpecDecim prima
+    // della FFT. Una FFT da 1024 pt a sr/16 copre la stessa finestra temporale (~372 ms a
+    // 44100 Hz) e la stessa risoluzione (~2.7 Hz/bin) di una 16384 pt a full rate, ma costa
+    // ~16× meno → hop piccolo e frame rate alto (~23 ms) a CPU molto ridotta.
+    static constexpr int kSpecDecim   = 16;
+    static constexpr int kFftLowOrder = 10;                 // 1024 pt @ rate decimato
     static constexpr int kFftLowSize  = 1 << kFftLowOrder;
-    static constexpr int kFftLowHop   = kFftLowSize / 4;
+    static constexpr int kFftLowHop   = kFftLowSize / 16;   // 64 camp. decimati ≈ 23 ms
     static constexpr int kSpecBands    = 96;
     static constexpr int kSpecBandsMax = 256;
-    static constexpr float kSpecLowCrossHz = 500.0f;        // più bande usano la FFT ad alta risoluzione
+    // Crossover alto: tutte le basse (≤ 500 Hz) passano per la FFT fine decimata, che ha
+    // lobo stretto e niente sbavature. La Nyquist decimata (~1378 Hz a 44100) lascia ampio
+    // margine. Le bande sopra usano la FFT corta, dove la risoluzione grossolana non disturba.
+    static constexpr float kSpecLowCrossHz = 500.0f;
 
     float _specMagL[kSpecBandsMax] = {};
     float _specMagR[kSpecBandsMax] = {};
@@ -84,7 +92,8 @@ private:
     void fillScopeFifo (const juce::AudioBuffer<float>& buffer);
     void feedSpectrum (const juce::AudioBuffer<float>& buffer);
     void computeSpectrumFrame (bool lowBands);
-    void rebuildSpecBands (int count);   // ricalcola la band-map per il nuovo conteggio (thread audio)
+    void rebuildSpecBands (int count);          // ricalcola la band-map per il nuovo conteggio (thread audio)
+    void prepareDecimationFilter (double sampleRate);   // coeff. Butterworth anti-alias per il path basse
 
     // ===== LUFS (ITU-R BS.1770) =====
     void prepareLufs (double sampleRate);
@@ -125,18 +134,39 @@ private:
     float _hannWindow[kFftSize]       = {};
     float _hannWindowLow[kFftLowSize] = {};
 
-    float _fftRingL[kFftLowSize] = {};
-    float _fftRingR[kFftLowSize] = {};
-    float _fftRingMid[kFftLowSize]  = {};
-    float _fftRingSide[kFftLowSize] = {};
-    int   _fftRingPos    = 0;
-    int   _fftHopCount   = 0;
+    // Ring per il path medie/alte (full rate, finestra = kFftSize)
+    float _rawRingL[kFftSize] = {};
+    float _rawRingR[kFftSize] = {};
+    float _rawRingMid[kFftSize]  = {};
+    float _rawRingSide[kFftSize] = {};
+    int   _rawRingPos  = 0;
+    int   _fftHopCount = 0;
+
+    // Ring per il path basse (rate decimato sr/kSpecDecim, finestra = kFftLowSize)
+    float _decRingL[kFftLowSize] = {};
+    float _decRingR[kFftLowSize] = {};
+    float _decRingMid[kFftLowSize]  = {};
+    float _decRingSide[kFftLowSize] = {};
+    int   _decRingPos     = 0;
     int   _fftLowHopCount = 0;
-    float _fftWorkBuf[kFftLowSize * 2] = {};
+    int   _decimCounter   = 0;   // campioni raw accumulati verso il prossimo campione decimato
+
+    // Filtro anti-aliasing (Butterworth 6° ordine = 3 biquad) applicato prima della
+    // decimazione; coefficienti condivisi, stato indipendente per canale L/R/Mid/Side.
+    static constexpr int kAaStages = 3;
+    Biquad      _aaCoef[kAaStages];
+    BiquadState _aaState[4][kAaStages];
+
+    float _fftWorkBuf[kFftSize * 2] = {};
 
     int  _bandLo[kSpecBandsMax]     = {};
     int  _bandHi[kSpecBandsMax]     = {};
     bool _bandUseLow[kSpecBandsMax] = {};
+
+    // Smoothing per-banda (attacco/decadimento): graduato per frequenza così la risposta
+    // varia con continuità e la cucitura tra path decimato e path corto è impercettibile.
+    float _bandAtk[kSpecBandsMax] = {};
+    float _bandDcy[kSpecBandsMax] = {};
 
     double _specSampleRate = 48000.0;        // memorizzato per ricalcolare la band-map
     std::atomic<int> _pendingSpecBandCount { 0 };   // 0 = nessun cambio in attesa
