@@ -9,7 +9,7 @@ on:
 jobs:
   build:
     name: Build on Windows
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
     - name: Checkout code
@@ -26,9 +26,6 @@ jobs:
 
     - name: Configure CMake
       uses: lukka/get-cmake@latest
-
-    - name: Set up MSVC (Windows)
-      uses: ilammy/msvc-dev-cmd@v1
 
     - name: Set up Node.js
       uses: actions/setup-node@v4

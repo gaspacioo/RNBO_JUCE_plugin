@@ -78,6 +78,11 @@ private:
                 _audioProcessor->resetLufsIntegrated();
                 completion (juce::var());
             })
+            .withNativeFunction("setSpecBands", [this] (const juce::Array<juce::var>& args, juce::WebBrowserComponent::NativeFunctionCompletion completion) {
+                if (args.size() >= 1)
+                    _audioProcessor->setSpecBandCount ((int) args[0]);
+                completion (juce::var());
+            })
             .withOptionsFrom (_gainRelay)
             .withOptionsFrom (_tempRelay)
             .withOptionsFrom (_distRelay)

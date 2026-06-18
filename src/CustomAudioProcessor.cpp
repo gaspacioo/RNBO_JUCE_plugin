@@ -123,30 +123,9 @@ void CustomAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     for (int i = 0; i < kFftLowSize; ++i)
         _hannWindowLow[i] = blackmanHarris (i, kFftLowSize);
 
-    const float nyquist = sr * 0.5f;
-    const float fMin    = 20.0f;
-    const float fMax    = std::min (20000.0f, nyquist);
-
-    for (int b = 0; b < kSpecBands; ++b)
-    {
-        // Bordi di banda log-spaced: banda b copre [edge(b), edge(b+1))
-        const float fLo = fMin * std::pow (fMax / fMin, (float) b       / (float) kSpecBands);
-        const float fHi = fMin * std::pow (fMax / fMin, (float) (b + 1) / (float) kSpecBands);
-
-        // Sotto il crossover la banda usa la FFT lunga (più bin per ottava)
-        const bool useLow = fHi < kSpecLowCrossHz;
-        const int  halfN  = (useLow ? kFftLowSize : kFftSize) / 2;
-
-        int lo = (int) std::floor (fLo / nyquist * (float) halfN);
-        int hi = (int) std::ceil  (fHi / nyquist * (float) halfN) - 1;
-
-        lo = juce::jlimit (1, halfN, lo);
-        hi = juce::jlimit (lo, halfN, hi);
-
-        _bandLo[b]     = lo;
-        _bandHi[b]     = hi;
-        _bandUseLow[b] = useLow;
-    }
+    _specSampleRate = sr;
+    rebuildSpecBands (_specBandCount.load (std::memory_order_relaxed));
+    _pendingSpecBandCount.store (0, std::memory_order_relaxed);
 
     _fftRingPos     = 0;
     _fftHopCount    = 0;
@@ -395,6 +374,12 @@ void CustomAudioProcessor::feedSpectrum (const juce::AudioBuffer<float>& buffer)
     if (numChannels <= 0 || numSamples <= 0)
         return;
 
+    // Cambio del numero di bande richiesto dalla UI: applicato qui (thread audio)
+    // così la band-map e i mag non sono mai modificati mentre vengono letti altrove.
+    const int pending = _pendingSpecBandCount.exchange (0, std::memory_order_relaxed);
+    if (pending != 0 && pending != _specBandCount.load (std::memory_order_relaxed))
+        rebuildSpecBands (pending);
+
     const auto* chL = buffer.getReadPointer (0);
     const auto* chR = numChannels > 1 ? buffer.getReadPointer (1) : chL;
 
@@ -424,12 +409,59 @@ void CustomAudioProcessor::feedSpectrum (const juce::AudioBuffer<float>& buffer)
     }
 }
 
+void CustomAudioProcessor::setSpecBandCount (int n)
+{
+    // Richiesta dalla UI (message thread): applicata sul thread audio al prossimo blocco.
+    _pendingSpecBandCount.store (juce::jlimit (32, kSpecBandsMax, n), std::memory_order_relaxed);
+}
+
+void CustomAudioProcessor::rebuildSpecBands (int count)
+{
+    count = juce::jlimit (32, kSpecBandsMax, count);
+
+    const float sr      = (float) (_specSampleRate > 0.0 ? _specSampleRate : 48000.0);
+    const float nyquist = sr * 0.5f;
+    const float fMin    = 20.0f;
+    const float fMax    = std::min (20000.0f, nyquist);
+
+    for (int b = 0; b < count; ++b)
+    {
+        // Bordi di banda log-spaced: banda b copre [edge(b), edge(b+1))
+        const float fLo = fMin * std::pow (fMax / fMin, (float) b       / (float) count);
+        const float fHi = fMin * std::pow (fMax / fMin, (float) (b + 1) / (float) count);
+
+        // Sotto il crossover la banda usa la FFT lunga (più bin per ottava)
+        const bool useLow = fHi < kSpecLowCrossHz;
+        const int  halfN  = (useLow ? kFftLowSize : kFftSize) / 2;
+
+        int lo = (int) std::floor (fLo / nyquist * (float) halfN);
+        int hi = (int) std::ceil  (fHi / nyquist * (float) halfN) - 1;
+
+        lo = juce::jlimit (1, halfN, lo);
+        hi = juce::jlimit (lo, halfN, hi);
+
+        _bandLo[b]     = lo;
+        _bandHi[b]     = hi;
+        _bandUseLow[b] = useLow;
+    }
+
+    // Riparti da silenzio sulle bande attive: la mappatura bin→banda è cambiata
+    std::fill (_specMagL,    _specMagL    + count, kSilenceDb);
+    std::fill (_specMagR,    _specMagR    + count, kSilenceDb);
+    std::fill (_specMagMid,  _specMagMid  + count, kSilenceDb);
+    std::fill (_specMagSide, _specMagSide + count, kSilenceDb);
+
+    _specBandCount.store (count, std::memory_order_release);
+}
+
 void CustomAudioProcessor::computeSpectrumFrame (bool lowBands)
 {
-    float newMagL[kSpecBands];
-    float newMagR[kSpecBands];
-    float newMagMid[kSpecBands];
-    float newMagSide[kSpecBands];
+    const int numBands = _specBandCount.load (std::memory_order_relaxed);
+
+    float newMagL[kSpecBandsMax];
+    float newMagR[kSpecBandsMax];
+    float newMagMid[kSpecBandsMax];
+    float newMagSide[kSpecBandsMax];
 
     auto&       fft     = lowBands ? _fftLow        : _fft;
     const auto* window  = lowBands ? _hannWindowLow : _hannWindow;
@@ -452,7 +484,7 @@ void CustomAudioProcessor::computeSpectrumFrame (bool lowBands)
         std::fill (_fftWorkBuf + fftLen, _fftWorkBuf + fftLen * 2, 0.0f);
         fft.performRealOnlyForwardTransform (_fftWorkBuf, true);
 
-        for (int b = 0; b < kSpecBands; ++b)
+        for (int b = 0; b < numBands; ++b)
         {
             if (_bandUseLow[b] != lowBands)
                 continue;
@@ -477,7 +509,7 @@ void CustomAudioProcessor::computeSpectrumFrame (bool lowBands)
     {
         const float alpha = lowBands ? 0.6f : 0.7f;
 
-        for (int b = 0; b < kSpecBands; ++b)
+        for (int b = 0; b < numBands; ++b)
         {
             if (_bandUseLow[b] != lowBands)
                 continue;

@@ -24,13 +24,55 @@ body {
     position: relative;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    padding: 12px;
+    align-items: stretch;
+    gap: 0;
+    padding: 8px;
     width: 100%;
     height: 100%;
     user-select: none;
+}
+
+/* Riga unica orizzontale con 5 colonne: IN | Spectrum | Center | VS | OUT */
+.main-row {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 10px;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+}
+
+/* Colonna spettro: cresce a riempire lo spazio disponibile */
+.spec-col {
+    flex: 1.5 1 0;
+    min-width: 100px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+/* spec-wrapper usa position:absolute per evitare height:100% in flex WebKit */
+.spec-col .spec-wrapper {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.spec-col #spectrumCanvas {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Colonna VS (vectorscope + balance + correlation): larghezza fissa */
+.vs-col {
+    flex: 0 0 196px;   /* larghezza esplicita = vs-meter-block 196px */
+    width: 196px;
+    display: flex;
+    flex-direction: column;
 }
 
 .resize-corner {
@@ -60,41 +102,38 @@ body {
 /* ==========================================================================
    METERS LOGIC & LAYOUT
    ========================================================================== */
-.meters {
-    display: flex;
-    align-items: stretch;
-    justify-content: center;
-    gap: 16px;
-    flex: 0 0 auto;
-    width: min(450px, 100%);
-}
 
-/* Colonna centrale: slider sopra, statistiche sotto, tra i due meter */
+/* Colonna centrale: slider sopra, statistiche sotto */
 .center-col {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
-    flex: 1 1 auto;
-    min-width: 0;
+    gap: 8px;
+    flex: 2 1 0;
+    min-width: 240px;
+    position: relative;
+    z-index: 1;      /* sopra spec-col e vs-col per ricevere correttamente i pointer events */
 }
 
 .meter {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
     width: 80px;
     flex: 0 0 80px;
+    position: relative;
 }
 
+/* Label "IN"/"OUT": assoluto sopra il track, non sottrae altezza alla barra */
 .meter-head {
+    position: absolute;
+    top: -20px;
+    left: 5px;
+    z-index: 2;
+    pointer-events: none;
+    height: 12px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    width: 80px;
-    height: 12px;
-    flex: 0 0 12px;
 }
 
 .meter-label {
@@ -111,12 +150,14 @@ body {
     justify-content: center;
     gap: 4px;
     padding: 5px;
+    padding-top: 16px;
     width: 80px;
-    flex: 1 1 auto;     /* si allunga su tutta l'altezza della riga */
+    flex: 1 1 auto;
     min-height: 152px;
     background: #252525;
     border: 1px solid #3a3a3a;
     border-radius: 3px;
+    position: relative;
 }
 
 .meter-ch {
@@ -131,20 +172,29 @@ body {
 .meter-bar {
     position: relative;
     width: 20px;
-    flex: 1 1 auto;     /* riempie l'altezza disponibile della track */
+    flex: 1 1 auto;
     min-height: 112px;
-    background: rgba(0, 0, 0, 0.35);
-    border-radius: 2px;
+    background: linear-gradient(to top,
+        rgb(91, 195, 88)  0%,
+        rgb(77, 216, 72) 60%,
+        #ff9d00 90%,
+        #ee4a38 96%,
+        #ff1900 100%
+    );
+    border-radius: 3px;
     border: 1px solid #333;
-    display: flex;
-    align-items: flex-end;
     overflow: hidden;
 }
 
+/* Maschera scura che copre dall'alto: 100% = silenzio, 0% = 0 dBFS */
 .meter-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
     width: 100%;
-    height: 0%;
-    background: linear-gradient(to top, #27ae60 0%, #f1c40f 70%, #e74c3c 100%);
+    height: 100%;
+    background: #181818;
 }
 
 /* Scala dBFS tra le due barre (popolata via JS) */
@@ -172,12 +222,12 @@ body {
 
 .meter-peak {
     position: absolute;
-    left: 1px;
-    right: 1px;
+    left: 0px;
+    right: 0px;
     bottom: 0%;
-    height: 2px;
+    height: 1px;
     background: rgba(255, 255, 255, 0.92);
-    border-radius: 1px;
+    border-radius: 5px;
     box-shadow: 0 0 3px rgba(255, 255, 255, 0.35);
     pointer-events: none;
     opacity: 0;
@@ -211,12 +261,15 @@ body {
 }
 
 .clip-led {
+    position: absolute;
+    top: 4px;
+    right: 4px;
     width: 7px;
     height: 7px;
     border-radius: 50%;
     background: #2a2a2a;
     border: 1px solid #404040;
-    flex: 0 0 7px;
+    z-index: 3;
 }
 
 .clip-led.active {
@@ -369,17 +422,9 @@ body {
 /* ==========================================================================
    METER SECTION (CORRELATION & VECTORSCOPE)
    ========================================================================== */
+/* .meter-section rimosso dal layout; usato solo per retro-compatibilità se presente */
 .meter-section {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 32px;
-    padding: 12px;
-    background: #181818;
-    border: 1px solid #333333;
-    border-radius: 4px;
-    width: min(450px, 100%);
-    flex: 0 0 auto;
+    display: none;
 }
 
 .control-group {
@@ -441,12 +486,14 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: space-between;
     gap: 4px;
     background: #0f0f0f;
     border: 1px solid #3a3a3a;
     border-radius: 4px;
     padding: 8px;
-    width: 166px;
+    width: 196px;             /* 180px canvas + 8px padding × 2 */
+    flex: 1 1 auto;           /* si allunga a tutta l'altezza della main-row */
     box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8);
 }
 
@@ -458,7 +505,7 @@ body {
     display: flex;
     align-items: center;
     gap: 3px;
-    width: 150px;
+    width: 180px;
 }
 
 .bal-label,
@@ -483,10 +530,12 @@ body {
    VECTORSCOPE
    ========================================================================== */
 #vectorscopeCanvas {
-    background-color: transparent;
-    border: none;
-    border-radius: 0;
+    background-color: #0a0a0f;
+    border: 1px solid #2a2a2a;
+    border-radius: 3px;
     display: block;
+    width: 180px;
+    height: 180px;
 }
 
 .vs-wrapper {
@@ -501,6 +550,8 @@ body {
     pointer-events: none;
     background: transparent;
     border-radius: 5px;
+    width: 180px;
+    height: 180px;
 }
 
 .vs-controls {
@@ -531,8 +582,9 @@ body {
     user-select: none;
 }
 
-/* "M/S" è a 3 caratteri: font più piccolo per stare nel button */
-#specMsToggle {
+/* Etichette a 3 caratteri ("M/S", "192"/"256"): font più piccolo per stare nel button */
+#specMsToggle,
+#specBandsToggle {
     font-size: 6px;
     letter-spacing: -0.3px;
 }
@@ -590,7 +642,7 @@ body {
 }
 
 .volume-spacer {
-    margin-left: 32px;
+    margin-left: 6px;
 }
 
 /* ==========================================================================
@@ -602,7 +654,7 @@ body {
     align-items: center;
     justify-content: space-between;
     width: 56px;
-    height: 170px;
+    height: calc(29.5vh + 58px);   /* 170px @ 380px window; scales with height */
     flex: 0 0 56px;
 }
 
@@ -618,7 +670,7 @@ body {
 .fader-track {
     position: relative;
     width: 20px;
-    height: 112px;
+    height: 29.5vh;    /* 112px @ 380px window; scales with height */
     display: flex;
     justify-content: center;
     margin-top: 5px;
@@ -632,7 +684,7 @@ body {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 112px;
+    width: 29.5vh;     /* 112px @ 380px window; deve corrispondere a .fader-track height */
     height: 4px;
     background: #181818;
     border: 1px solid #333;
@@ -1045,22 +1097,23 @@ body {
    JPEG COMPANY LOGO BUTTON
    ========================================================================== */
 .info-button {
-  position: absolute;
-  top: 10px;
-  right: 10px;
+  position: relative;
+  flex: 0 0 auto;
+  align-self: flex-end;
   background: transparent;
   border: none;
   cursor: pointer;
   padding: 0;
-  
-  width: 50px;   
-  height: 50px;
-  
+
+  width: 32px;
+  height: 32px;
+
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   transition: transform 0.2s ease;
+  margin-bottom: 2px;
 }
 
 .logo-image {

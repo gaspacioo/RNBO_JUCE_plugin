@@ -16,13 +16,13 @@
         class="logo-image" alt="Musicforge Studio Logo" />
     </button>
 
-    <div class="meters" aria-label="RMS and peak meters">
+    <div class="main-row">
       <div class="meter">
         <div class="meter-head">
           <span class="meter-label">In</span>
-          <span id="inputClip" class="clip-led" title="Clip" aria-label="Input clip"></span>
         </div>
         <div class="meter-track" aria-hidden="true">
+          <span id="inputClip" class="clip-led" title="Clip" aria-label="Input clip"></span>
           <div class="meter-ch">
             <div class="meter-bar">
               <div id="inputFillL" class="meter-fill"></div>
@@ -39,6 +39,22 @@
             </div>
             <span id="inputRmsR" class="db-rms">−∞</span>
             <span id="inputPeakValR" class="db-peak">−∞</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="spec-col">
+        <div class="spec-wrapper">
+          <canvas id="spectrumCanvas"></canvas>
+          <div class="spec-controls">
+          <button id="specBarsToggle" class="vs-btn" title="Toggle spectrum bars (P overlay stays)">≣</button>
+          <button id="specPeakToggle" class="vs-btn" title="Toggle peak hold">PK</button>
+          <button id="specTiltToggle" class="vs-btn" title="Toggle pinking compensation (+3 dB/oct)">T</button>
+          <button id="specAvgToggle" class="vs-btn" title="Toggle long-term average">A</button>
+          <button id="specIqToggle" class="vs-btn" title="Per-band overlay: L/R → stereo energy panorama · M/S → phase correlation">P</button>
+          <button id="specMsToggle" class="vs-btn" title="Toggle L/R ↔ M/S spectrum">M/S</button>
+          <button id="specBandsToggle" class="vs-btn" title="Cycle band count (96 / 192 / 256)">96</button>
+          <button id="specRangeToggle" class="vs-btn" title="Cycle dB range (-60 / -90 / -120)">dB</button>
           </div>
         </div>
       </div>
@@ -149,12 +165,37 @@
       </div>
       </div>
 
+      <div class="vs-col">
+        <div class="vs-meter-block">
+        <div class="balance-group" title="L/R Energy Balance">
+        <span class="bal-label">L</span>
+        <canvas id="balanceCanvas"></canvas>
+        <span class="bal-label">R</span>
+        </div>
+        <div class="vs-wrapper">
+        <canvas id="vectorscopeCanvas" width="180" height="180"></canvas>
+        <canvas id="vectorscopeOverlay" width="180" height="180"></canvas>
+        <div class="vs-controls">
+        <button id="vsZoomIn"        class="vs-btn" title="Zoom in">+</button>
+        <button id="vsZoomOut"       class="vs-btn" title="Zoom out">−</button>
+        <button id="vsOverlayToggle" class="vs-btn" title="Toggle reference overlay">⊙</button>
+        <button id="vsModeToggle"    class="vs-btn" title="Toggle dots / line view">∿</button>
+        </div>
+        </div>
+        <div class="correlation-group" title="Phase Correlation">
+        <span class="corr-label">-1</span>
+        <canvas id="correlationCanvas"></canvas>
+        <span class="corr-label">+1</span>
+        </div>
+        </div>
+      </div>
+
       <div class="meter">
         <div class="meter-head">
           <span class="meter-label">Out</span>
-          <span id="outputClip" class="clip-led" title="Clip" aria-label="Output clip"></span>
         </div>
         <div class="meter-track" aria-hidden="true">
+          <span id="outputClip" class="clip-led" title="Clip" aria-label="Output clip"></span>
           <div class="meter-ch">
             <div class="meter-bar">
               <div id="outputFillL" class="meter-fill"></div>
@@ -176,48 +217,6 @@
       </div>
     </div>
 
-    <div class="meter-section">
-      <div class="meter-col">
-        <div class="control-group">
-          <div class="spec-wrapper">
-            <canvas id="spectrumCanvas" width="230" height="280"></canvas>
-            <div class="spec-controls">
-              <button id="specPeakToggle" class="vs-btn" title="Toggle peak hold">PK</button>
-              <button id="specTiltToggle" class="vs-btn" title="Toggle pinking compensation (+3 dB/oct)">T</button>
-              <button id="specAvgToggle" class="vs-btn" title="Toggle long-term average">A</button>
-              <button id="specIqToggle" class="vs-btn" title="Stereo energy panorama per band">P</button>
-              <button id="specMsToggle" class="vs-btn" title="Toggle L/R ↔ M/S spectrum">M/S</button>
-              <button id="specRangeToggle" class="vs-btn" title="Cycle dB range (-60 / -90 / -120)">dB</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="meter-col">
-        <div class="vs-meter-block">
-          <div class="balance-group" title="L/R Energy Balance">
-            <span class="bal-label">L</span>
-            <canvas id="balanceCanvas"></canvas>
-            <span class="bal-label">R</span>
-          </div>
-          <div class="vs-wrapper">
-            <canvas id="vectorscopeCanvas" width="150" height="150"></canvas>
-            <canvas id="vectorscopeOverlay" width="150" height="150"></canvas>
-            <div class="vs-controls">
-              <button id="vsZoomIn"        class="vs-btn" title="Zoom in">+</button>
-              <button id="vsZoomOut"       class="vs-btn" title="Zoom out">−</button>
-              <button id="vsOverlayToggle" class="vs-btn" title="Toggle reference overlay">⊙</button>
-              <button id="vsModeToggle"    class="vs-btn" title="Toggle dots / line view">∿</button>
-            </div>
-          </div>
-          <div class="correlation-group" title="Phase Correlation">
-            <span class="corr-label">-1</span>
-            <canvas id="correlationCanvas"></canvas>
-            <span class="corr-label">+1</span>
-          </div>
-        </div>
-      </div>
-    </div>
 
   </div>
 

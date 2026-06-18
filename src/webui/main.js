@@ -67,9 +67,9 @@ function waitForJUCE(maxWaitMs = 5000) {
 
 // ===== COSTANTI =====
 const UI_LIMITS = {
-    MIN_WIDTH: 600,
-    MAX_WIDTH: 720,
-    MIN_HEIGHT: 650,
+    MIN_WIDTH: 870,
+    MAX_WIDTH: 1500,
+    MIN_HEIGHT: 360,
     MAX_HEIGHT: 900
 };
 
@@ -552,7 +552,7 @@ function setChannel(fillId, peakMarkerId, rmsLabelId, peakLabelId, rmsDb, peakDb
     const rmsLabel = document.getElementById(rmsLabelId);
     const peakLabel = document.getElementById(peakLabelId);
 
-    if (fill) fill.style.height = dbToPercent(rmsDb) + '%';
+    if (fill) fill.style.height = (100 - dbToPercent(rmsDb)) + '%';
     if (peakMarker) {
         const peakPct = dbToPercent(peakDb);
         peakMarker.style.bottom = peakPct + '%';
@@ -604,7 +604,7 @@ function _drawSegmentMeter(canvasId, value, mode) {
     if (!canvas) return;
     const dpr  = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
-    const logW = Math.round(rect.width)  || 150;
+    const logW = Math.round(rect.width)  || 156;
     const logH = Math.round(rect.height) || 10;
     if (canvas.width !== Math.round(logW * dpr) || canvas.height !== Math.round(logH * dpr)) {
         canvas.width  = Math.round(logW * dpr);
@@ -783,20 +783,52 @@ let _dpr = 1;
 let _vsW = 0, _vsH = 0;
 let _specW = 0, _specH = 0;
 
-// Ridimensiona il backing store per il devicePixelRatio mantenendo le
-// dimensioni CSS originali: il disegno resta in coordinate logiche
-// grazie alla transform, ma il rendering è nitido su display retina
+// Ridimensiona il backing store leggendo la dimensione CSS reale del canvas
+// (getBoundingClientRect), così funziona sia con dimensioni fisse che con
+// canvas flessibili (100% width/height nel nuovo layout a 5 colonne).
 function setupHiDPICanvas(canvas) {
-    const dpr = window.devicePixelRatio || 1;
+    const dpr  = window.devicePixelRatio || 1;
     _dpr = dpr;
-    const w = canvas.width;
-    const h = canvas.height;
-    canvas.style.width  = w + 'px';
-    canvas.style.height = h + 'px';
+    const rect = canvas.getBoundingClientRect();
+    const w = Math.max(1, Math.round(rect.width  || parseInt(canvas.getAttribute('width'))  || 180));
+    const h = Math.max(1, Math.round(rect.height || parseInt(canvas.getAttribute('height')) || 180));
     canvas.width  = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
     canvas.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
     return { w, h };
+}
+
+// Aggiorna il backing store HiDPI dei canvas del vectorscope.
+// Chiamata all'avvio (dopo layout) e quando la finestra viene ridimensionata.
+function updateVsSize() {
+    const vsCanvas = document.getElementById('vectorscopeCanvas');
+    if (vsCanvas) {
+        const { w, h } = setupHiDPICanvas(vsCanvas);
+        _vsW = w; _vsH = h;
+    }
+    if (_vsOverlayCanvas) setupHiDPICanvas(_vsOverlayCanvas);
+}
+
+function setupCanvasResizeObserver() {
+    const specCanvas = document.getElementById('spectrumCanvas');
+    const vsCanvas   = document.getElementById('vectorscopeCanvas');
+    if (!specCanvas && !vsCanvas) return;
+
+    const refresh = () => {
+        if (specCanvas) {
+            const d = setupHiDPICanvas(specCanvas);
+            _specW = d.w; _specH = d.h;
+        }
+        if (vsCanvas) {
+            const d = setupHiDPICanvas(vsCanvas);
+            _vsW = d.w; _vsH = d.h;
+            if (_vsOverlayCanvas) setupHiDPICanvas(_vsOverlayCanvas);
+        }
+    };
+
+    const ro = new ResizeObserver(refresh);
+    if (specCanvas) ro.observe(specCanvas);
+    if (vsCanvas)   ro.observe(vsCanvas);
 }
 
 function loadUiState() {
@@ -816,7 +848,9 @@ function saveUiState(patch) {
 }
 
 // ===== SPECTRUM ANALYZER =====
-const SPEC_BANDS   = 96;
+const SPEC_BAND_CAP = 256;   // massimo allocato; il C++ cicla 96/192/256
+const SPEC_BAND_STEPS = [96, 192, 256];
+let _specBands = 96;         // conteggio attivo, seguito dal valore confermato dal C++
 const SPEC_DB_RANGES = [-60, -90, -120];  // range ciclabili dal toggle dB
 const SPEC_DB_MAX  = 0;
 const SPEC_ATTACK  = 0.55;  // lerp per frame verso il target in salita
@@ -834,37 +868,38 @@ const SPEC_FLOOR_DB    = -96;
 
 let _specDbMin   = -90;   // minimo del range visualizzato, ciclato dal toggle dB
 
-let _specTargetL = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
-let _specTargetR = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
-let _specDrawL   = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
-let _specDrawR   = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
-let _specPeakL    = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
-let _specPeakR    = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
-let _specPeakAgeL = new Uint16Array(SPEC_BANDS);  // frame dall'ultimo aggiornamento del peak
-let _specPeakAgeR = new Uint16Array(SPEC_BANDS);
+let _specTargetL = new Float32Array(SPEC_BAND_CAP).fill(SPEC_FLOOR_DB - 1);
+let _specTargetR = new Float32Array(SPEC_BAND_CAP).fill(SPEC_FLOOR_DB - 1);
+let _specDrawL   = new Float32Array(SPEC_BAND_CAP).fill(SPEC_FLOOR_DB - 1);
+let _specDrawR   = new Float32Array(SPEC_BAND_CAP).fill(SPEC_FLOOR_DB - 1);
+let _specPeakL    = new Float32Array(SPEC_BAND_CAP).fill(SPEC_FLOOR_DB - 1);
+let _specPeakR    = new Float32Array(SPEC_BAND_CAP).fill(SPEC_FLOOR_DB - 1);
+let _specPeakAgeL = new Uint16Array(SPEC_BAND_CAP);  // frame dall'ultimo aggiornamento del peak
+let _specPeakAgeR = new Uint16Array(SPEC_BAND_CAP);
 // Spettri Mid/Side (vista alternativa a L/R)
 let _specMsMode    = false;   // false = L/R, true = M/S
-let _specTargetMid  = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
-let _specTargetSide = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
-let _specDrawMid    = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
-let _specDrawSide   = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
-let _specPeakMid     = new Float32Array(SPEC_BANDS).fill(SPEC_FLOOR_DB - 1);
-let _specPeakAgeMid  = new Uint16Array(SPEC_BANDS);
-let _specSideT       = new Float32Array(SPEC_BANDS);   // ampiezza Side norm. per banda (linea)
+let _specTargetMid  = new Float32Array(SPEC_BAND_CAP).fill(SPEC_FLOOR_DB - 1);
+let _specTargetSide = new Float32Array(SPEC_BAND_CAP).fill(SPEC_FLOOR_DB - 1);
+let _specDrawMid    = new Float32Array(SPEC_BAND_CAP).fill(SPEC_FLOOR_DB - 1);
+let _specDrawSide   = new Float32Array(SPEC_BAND_CAP).fill(SPEC_FLOOR_DB - 1);
+let _specPeakMid     = new Float32Array(SPEC_BAND_CAP).fill(SPEC_FLOOR_DB - 1);
+let _specPeakAgeMid  = new Uint16Array(SPEC_BAND_CAP);
+let _specSideT       = new Float32Array(SPEC_BAND_CAP);   // ampiezza Side norm. per banda (linea)
 let _specPeakHold = false;
 let _specTiltOn   = false;
+let _specBarsOn   = true;    // false = nasconde le barre dello spettro (ma tiene grid + overlay P)
 // IQ panorama: bilanciamento stereo per banda (-1 = L, +1 = R), smussato nel tempo
 let _specIqOn = false;
-let _specBal      = new Float32Array(SPEC_BANDS);  // bilanciamento smussato nel tempo
-let _specBalDraw  = new Float32Array(SPEC_BANDS);  // dopo smoothing in frequenza
-let _specIqActive = new Uint8Array(SPEC_BANDS);    // 1 = banda sopra soglia
+let _specBal      = new Float32Array(SPEC_BAND_CAP);  // bilanciamento smussato nel tempo
+let _specBalDraw  = new Float32Array(SPEC_BAND_CAP);  // dopo smoothing in frequenza
+let _specIqActive = new Uint8Array(SPEC_BAND_CAP);    // 1 = banda sopra soglia
 // Media a lungo termine: media incrementale della potenza lineare per banda
 // (mediare in potenza, non in dB, dà il giusto peso ai passaggi forti)
 let _specAvgOn    = false;
-let _specAvgL     = new Float64Array(SPEC_BANDS);
-let _specAvgR     = new Float64Array(SPEC_BANDS);
-let _specAvgMid   = new Float64Array(SPEC_BANDS);
-let _specAvgSide  = new Float64Array(SPEC_BANDS);
+let _specAvgL     = new Float64Array(SPEC_BAND_CAP);
+let _specAvgR     = new Float64Array(SPEC_BAND_CAP);
+let _specAvgMid   = new Float64Array(SPEC_BAND_CAP);
+let _specAvgSide  = new Float64Array(SPEC_BAND_CAP);
 let _specAvgCount = 0;
 let _specTiltOffsets = null;  // offset dB per banda, precalcolati al primo uso
 let _specMouse    = null;     // {x, y} in coordinate canvas, null se fuori
@@ -888,22 +923,63 @@ function hslToRgbStr(h, s, l) {
 
 // Arcobaleno per frequenza: banda 0 (basse) = rosso → banda alta = viola
 function buildSpecFreqColors() {
-    _specFreqColors = new Array(SPEC_BANDS);
+    _specFreqColors = new Array(SPEC_BAND_CAP);
     const HUE_LOW  = 0;     // rosso
     const HUE_HIGH = 285;   // viola
-    for (let b = 0; b < SPEC_BANDS; b++) {
-        const t = b / (SPEC_BANDS - 1);
+    for (let b = 0; b < _specBands; b++) {
+        const t = b / (_specBands - 1);
         const hue = HUE_LOW + (HUE_HIGH - HUE_LOW) * t;
         _specFreqColors[b] = hslToRgbStr(hue, 85, 55);
     }
 }
 
 function buildSpecTiltOffsets() {
-    _specTiltOffsets = new Float32Array(SPEC_BANDS);
-    for (let b = 0; b < SPEC_BANDS; b++) {
-        const freq = SPEC_F_MIN * Math.pow(SPEC_F_MAX / SPEC_F_MIN, (b + 0.5) / SPEC_BANDS);
+    _specTiltOffsets = new Float32Array(SPEC_BAND_CAP);
+    for (let b = 0; b < _specBands; b++) {
+        const freq = SPEC_F_MIN * Math.pow(SPEC_F_MAX / SPEC_F_MIN, (b + 0.5) / _specBands);
         _specTiltOffsets[b] = SPEC_TILT_DB_OCT * Math.log2(freq / SPEC_TILT_PIVOT);
     }
+}
+
+let _setSpecBandsNative = null;
+
+// Applica il nuovo conteggio di bande (confermato dal C++): ricostruisce le tabelle
+// dipendenti dalla mappa freq→banda e riazzera gli stati, perché il binning è cambiato.
+function applySpecBandCount(n) {
+    n = Math.max(32, Math.min(SPEC_BAND_CAP, n | 0));
+    _specBands = n;
+
+    buildSpecFreqColors();
+    buildSpecTiltOffsets();
+
+    const FLOOR = SPEC_FLOOR_DB - 1;
+    _specTargetL.fill(FLOOR);   _specTargetR.fill(FLOOR);
+    _specDrawL.fill(FLOOR);     _specDrawR.fill(FLOOR);
+    _specPeakL.fill(FLOOR);     _specPeakR.fill(FLOOR);
+    _specPeakAgeL.fill(0);      _specPeakAgeR.fill(0);
+    _specTargetMid.fill(FLOOR); _specTargetSide.fill(FLOOR);
+    _specDrawMid.fill(FLOOR);   _specDrawSide.fill(FLOOR);
+    _specPeakMid.fill(FLOOR);   _specPeakAgeMid.fill(0);
+    _specSideT.fill(0);
+    _specBal.fill(0);  _specBalDraw.fill(0);  _specIqActive.fill(0);
+    _specAvgL.fill(0); _specAvgR.fill(0); _specAvgMid.fill(0); _specAvgSide.fill(0);
+    _specAvgCount = 0;
+
+    const lbl = document.getElementById('specBandsToggle');
+    if (lbl) lbl.textContent = String(n);
+}
+
+// Richiede al C++ il prossimo conteggio nel ciclo 96 → 192 → 256 → 96
+function cycleSpecBandCount() {
+    const i = SPEC_BAND_STEPS.indexOf(_specBands);
+    const next = SPEC_BAND_STEPS[(i + 1) % SPEC_BAND_STEPS.length];
+    if (_setSpecBandsNative) {
+        try { _setSpecBandsNative(next); } catch (e) {}
+    }
+    saveUiState({ specBands: next });
+    // Aggiorna subito l'etichetta; il rendering segue il conteggio confermato dal C++
+    const lbl = document.getElementById('specBandsToggle');
+    if (lbl) lbl.textContent = String(next);
 }
 
 function buildSpecPalette() {
@@ -985,14 +1061,14 @@ function drawSpectrum() {
     const midX = w * 0.5;
     const gap  = 1;                       // spazio ai lati della linea centrale
     const halfW = midX - gap - 1;
-    const rowH = h / SPEC_BANDS;
+    const rowH = h / _specBands;
     const dbRange = SPEC_DB_MAX - _specDbMin;
 
     ctx.fillStyle = '#0a0a0f';
     ctx.fillRect(0, 0, w, h);
     drawSpectrumGrid(ctx, w, h, midX);
 
-    if (_specAvgOn && _specAvgCount > 0) {
+    if (_specBarsOn && _specAvgOn && _specAvgCount > 0) {
         const FILL       = { fill: 'rgba(194, 146, 68, 0.10)', stroke: 'rgba(194, 146, 68, 0.35)' };
         const WHITE_FILL = { fill: 'rgba(255, 255, 255, 0.10)', stroke: 'rgba(255, 255, 255, 0.40)' };
         if (!_specMsMode) {
@@ -1010,12 +1086,16 @@ function drawSpectrum() {
     const norm = (db, tilt) => db <= SPEC_FLOOR_DB ? 0
         : Math.min(1, Math.max(0, (db + tilt - _specDbMin) / dbRange));
 
-    for (let b = 0; b < SPEC_BANDS; b++) {
+    for (let b = 0; b < _specBands; b++) {
         // Smoothing temporale di tutte e 4 le serie (L/R servono anche all'overlay IQ)
         _specDrawL[b]    += (_specTargetL[b]    - _specDrawL[b])    * (_specTargetL[b]    > _specDrawL[b]    ? SPEC_ATTACK : SPEC_RELEASE);
         _specDrawR[b]    += (_specTargetR[b]    - _specDrawR[b])    * (_specTargetR[b]    > _specDrawR[b]    ? SPEC_ATTACK : SPEC_RELEASE);
         _specDrawMid[b]  += (_specTargetMid[b]  - _specDrawMid[b])  * (_specTargetMid[b]  > _specDrawMid[b]  ? SPEC_ATTACK : SPEC_RELEASE);
         _specDrawSide[b] += (_specTargetSide[b] - _specDrawSide[b]) * (_specTargetSide[b] > _specDrawSide[b] ? SPEC_ATTACK : SPEC_RELEASE);
+
+        // Le barre si disegnano solo se abilitate; lo smoothing sopra resta sempre
+        // attivo perché alimenta l'overlay P (panorama / correlazione di fase).
+        if (!_specBarsOn) continue;
 
         const tilt = _specTiltOn ? _specTiltOffsets[b] : 0;
         const y  = h - (b + 1) * rowH;
@@ -1073,13 +1153,13 @@ function drawSpectrum() {
     }
 
     // --- Side come linea continua bianca su entrambi i lati (solo M/S) ---
-    if (_specMsMode) {
+    if (_specBarsOn && _specMsMode) {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
         ctx.lineWidth = 1.2;
         ctx.lineJoin = 'round';
         for (const sideSign of [-1, +1]) {
             ctx.beginPath();
-            for (let b = 0; b < SPEC_BANDS; b++) {
+            for (let b = 0; b < _specBands; b++) {
                 const x = midX + sideSign * (gap + _specSideT[b] * halfW);
                 const y = h - (b + 0.5) * rowH;
                 b === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
@@ -1103,31 +1183,35 @@ const SPEC_IQ_SMOOTH = 0.30;   // smoothing temporale per banda
 const SPEC_IQ_SCALE  = 0.33;   // lunghezza max della barra come frazione di halfW
 const SPEC_IQ_FREQ_R = 2;      // raggio finestra smoothing in frequenza (±bande)
 function drawSpecIq(ctx, midX, halfW, h, rowH) {
-    // Fase 1: bilanciamento per banda con smoothing temporale (target 0 = centro
-    // per le bande sotto soglia, così decadono dolcemente verso il centro)
-    for (let b = 0; b < SPEC_BANDS; b++) {
-        const dbL = _specDrawL[b];
-        const dbR = _specDrawR[b];
-        const loud = Math.max(dbL, dbR);
+    const ms = _specMsMode;
+
+    // Fase 1: valore per banda con smoothing temporale (target 0 = centro per le
+    // bande sotto soglia, così decadono dolcemente verso il centro).
+    //  - L/R : panorama energia stereo  -1 (L) .. +1 (R)
+    //  - M/S : correlazione di fase  (M²−S²)/(M²+S²)  -1 (contro-fase) .. +1 (in fase)
+    for (let b = 0; b < _specBands; b++) {
+        const dbA = ms ? _specDrawMid[b]  : _specDrawR[b];   // +target → destra
+        const dbB = ms ? _specDrawSide[b] : _specDrawL[b];
+        const loud = Math.max(dbA, dbB);
         const active = loud > SPEC_FLOOR_DB && loud >= _specDbMin;
         _specIqActive[b] = active ? 1 : 0;
 
         let target = 0;
         if (active) {
-            const pL = Math.pow(10, dbL / 10);
-            const pR = Math.pow(10, dbR / 10);
-            const sum = pL + pR;
-            target = sum > 1e-20 ? (pR - pL) / sum : 0;   // -1 (L) .. +1 (R)
+            const pA = Math.pow(10, dbA / 10);
+            const pB = Math.pow(10, dbB / 10);
+            const sum = pA + pB;
+            target = sum > 1e-20 ? (pA - pB) / sum : 0;
         }
         _specBal[b] += (target - _specBal[b]) * SPEC_IQ_SMOOTH;
     }
 
     // Fase 2: smoothing in frequenza (media triangolare su ±SPEC_IQ_FREQ_R bande)
-    for (let b = 0; b < SPEC_BANDS; b++) {
+    for (let b = 0; b < _specBands; b++) {
         let acc = 0, wsum = 0;
         for (let d = -SPEC_IQ_FREQ_R; d <= SPEC_IQ_FREQ_R; d++) {
             const i = b + d;
-            if (i < 0 || i >= SPEC_BANDS) continue;
+            if (i < 0 || i >= _specBands) continue;
             const w = SPEC_IQ_FREQ_R + 1 - Math.abs(d);   // peso triangolare
             acc += _specBal[i] * w;
             wsum += w;
@@ -1135,13 +1219,22 @@ function drawSpecIq(ctx, midX, halfW, h, rowH) {
         _specBalDraw[b] = wsum > 0 ? acc / wsum : _specBal[b];
     }
 
-    // Fase 3: disegno. Barra dal centro verso il lato dominante, solo bande attive.
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+    // Fase 3: disegno. Barra dal centro, solo bande attive.
+    //  - L/R : barra bianca verso il lato dominante.
+    //  - M/S : barra colorata (verde = in fase a destra, rosso = contro-fase a
+    //          sinistra, bianco/arancio vicino a 0) con la palette della correlazione.
     const rh = Math.max(1, rowH);
-    for (let b = 0; b < SPEC_BANDS; b++) {
+    for (let b = 0; b < _specBands; b++) {
         if (!_specIqActive[b]) continue;
-        const len = _specBalDraw[b] * halfW * SPEC_IQ_SCALE;
+        const val = _specBalDraw[b];
+        const len = val * halfW * SPEC_IQ_SCALE;
         const y = h - (b + 1) * rowH;
+        if (ms) {
+            const [r, g, bl] = _segCorrColor(val);
+            ctx.fillStyle = `rgba(${r},${g},${bl},0.92)`;
+        } else {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+        }
         if (len >= 0) ctx.fillRect(midX, y, len, rh);
         else          ctx.fillRect(midX + len, y, -len, rh);
     }
@@ -1151,10 +1244,10 @@ function drawSpecIq(ctx, midX, halfW, h, rowH) {
 // side: -1 = sinistra, +1 = destra; data = array di potenze medie per banda;
 // style: { fill, stroke } (fill null = solo profilo a linea).
 function drawSpectrumAvgSide(ctx, side, data, midX, gap, halfW, h, rowH, dbRange, style) {
-    const xs = new Float32Array(SPEC_BANDS);
-    const ys = new Float32Array(SPEC_BANDS);
+    const xs = new Float32Array(SPEC_BAND_CAP);
+    const ys = new Float32Array(SPEC_BAND_CAP);
 
-    for (let b = 0; b < SPEC_BANDS; b++) {
+    for (let b = 0; b < _specBands; b++) {
         const mean = data[b];
         const db   = mean > 1e-12 ? 10 * Math.log10(mean) : -Infinity;
         const tilt = _specTiltOn ? _specTiltOffsets[b] : 0;
@@ -1168,8 +1261,8 @@ function drawSpectrumAvgSide(ctx, side, data, midX, gap, halfW, h, rowH, dbRange
     if (style.fill) {
         ctx.beginPath();
         ctx.moveTo(midX + side * gap, ys[0]);
-        for (let b = 0; b < SPEC_BANDS; b++) ctx.lineTo(xs[b], ys[b]);
-        ctx.lineTo(midX + side * gap, ys[SPEC_BANDS - 1]);
+        for (let b = 0; b < _specBands; b++) ctx.lineTo(xs[b], ys[b]);
+        ctx.lineTo(midX + side * gap, ys[_specBands - 1]);
         ctx.closePath();
         ctx.fillStyle = style.fill;
         ctx.fill();
@@ -1178,7 +1271,7 @@ function drawSpectrumAvgSide(ctx, side, data, midX, gap, halfW, h, rowH, dbRange
     // Profilo sottile della curva
     if (style.stroke) {
         ctx.beginPath();
-        for (let b = 0; b < SPEC_BANDS; b++)
+        for (let b = 0; b < _specBands; b++)
             b === 0 ? ctx.moveTo(xs[b], ys[b]) : ctx.lineTo(xs[b], ys[b]);
         ctx.strokeStyle = style.stroke;
         ctx.lineWidth = 1;
@@ -1207,7 +1300,7 @@ function drawSpectrumReadout(ctx, w, h, midX) {
     const freq = SPEC_F_MIN * Math.pow(SPEC_F_MAX / SPEC_F_MIN, frac);
 
     // Canale dal lato del cursore, dB dalla banda sotto il cursore
-    const band = Math.min(SPEC_BANDS - 1, Math.max(0, Math.floor(frac * SPEC_BANDS)));
+    const band = Math.min(_specBands - 1, Math.max(0, Math.floor(frac * _specBands)));
     const isLeft = x < midX;
     let chLabel, db;
     if (_specMsMode) {
@@ -1249,6 +1342,17 @@ function setupSpectrumControls() {
     _specH = dims.h;
 
     const saved = loadUiState();
+
+    const btnBars = document.getElementById('specBarsToggle');
+    _specBarsOn = saved.specBars !== false;   // default acceso
+    if (btnBars) {
+        btnBars.style.opacity = _specBarsOn ? '1' : '0.35';
+        btnBars.addEventListener('click', () => {
+            _specBarsOn = !_specBarsOn;
+            btnBars.style.opacity = _specBarsOn ? '1' : '0.35';
+            saveUiState({ specBars: _specBarsOn });
+        });
+    }
 
     const btnPeak = document.getElementById('specPeakToggle');
     _specPeakHold = saved.specPeak === true;
@@ -1311,8 +1415,27 @@ function setupSpectrumControls() {
     btnMs.addEventListener('click', () => {
         _specMsMode = !_specMsMode;
         btnMs.style.opacity = _specMsMode ? '1' : '0.35';
+        // Il pannello P cambia significato (panorama L/R ↔ correlazione di fase):
+        // azzera lo smoothing per non far scivolare i valori dalla metrica precedente
+        _specBal.fill(0);
+        _specBalDraw.fill(0);
         saveUiState({ specMs: _specMsMode });
     });
+
+    const btnBands = document.getElementById('specBandsToggle');
+    if (btnBands) {
+        try { _setSpecBandsNative = Juce.getNativeFunction('setSpecBands'); }
+        catch (e) { _setSpecBandsNative = null; }
+        const wanted = SPEC_BAND_STEPS.includes(saved.specBands) ? saved.specBands : 96;
+        btnBands.textContent = String(_specBands);
+        btnBands.title = 'Bande spettro (click per ciclare 96 / 192 / 256)';
+        btnBands.addEventListener('click', cycleSpecBandCount);
+        // Ripristina il conteggio salvato richiedendolo al C++ (default 96)
+        if (wanted !== 96 && _setSpecBandsNative) {
+            try { _setSpecBandsNative(wanted); } catch (e) {}
+            btnBands.textContent = String(wanted);
+        }
+    }
 
     const btnRange = document.getElementById('specRangeToggle');
     if (SPEC_DB_RANGES.includes(saved.specDbMin))
@@ -2156,6 +2279,17 @@ function buildMeterScales() {
 function wireMeters() {
     debugLog('wireMeters: Starting...');
     buildMeterScales();
+
+    // Canvas loop parte sempre — indipendente dalla disponibilità del backend
+    setupVectorscopeZoom();
+    setupSpectrumControls();
+    drawVectorscope();
+    drawSpectrum();
+    _drawSegmentMeter('balanceCanvas', 0, 'balance');
+    _drawSegmentMeter('correlationCanvas', 0, 'correlation');
+    setupCanvasResizeObserver();
+    requestAnimationFrame(() => requestAnimationFrame(updateVsSize));
+
     const backend = window.__JUCE__?.backend;
     if (!backend?.addEventListener) {
         debugLog('✗ Backend not available or addEventListener not found', 'ERROR');
@@ -2171,14 +2305,14 @@ function wireMeters() {
                 'inputFillL', 'inputFillR', 'inputPeakL', 'inputPeakR',
                 'inputRmsL', 'inputRmsR', 'inputPeakValL', 'inputPeakValR',
                 'inputClip', 'input',
-                data.inL, data.inR,
+                data.inPeakL, data.inPeakR,
                 getHeldPeak('inL', data.inPeakL), getHeldPeak('inR', data.inPeakR)
             );
             setStereoMeter(
                 'outputFillL', 'outputFillR', 'outputPeakL', 'outputPeakR',
                 'outputRmsL', 'outputRmsR', 'outputPeakValL', 'outputPeakValR',
                 'outputClip', 'output',
-                data.outL, data.outR,
+                data.outPeakL, data.outPeakR,
                 getHeldPeak('outL', data.outPeakL), getHeldPeak('outR', data.outPeakR)
             );
             setDelayTime(data.delayTime, data.sampleRate);
@@ -2214,13 +2348,17 @@ function wireMeters() {
             if (data.scopeBatchX && data.scopeBatchX.length > 0)
                 _vsPendingBatch = { bx: data.scopeBatchX, by: data.scopeBatchY };
 
-            if (data.specL && data.specL.length === SPEC_BANDS) {
-                for (let b = 0; b < SPEC_BANDS; b++) {
+            // Segui il conteggio confermato dal C++: la lunghezza degli array combacia
+            if (typeof data.specBandCount === 'number' && data.specBandCount !== _specBands)
+                applySpecBandCount(data.specBandCount);
+
+            if (data.specL && data.specL.length === _specBands) {
+                for (let b = 0; b < _specBands; b++) {
                     _specTargetL[b] = data.specL[b];
                     _specTargetR[b] = data.specR[b];
                 }
-                if (data.specMid && data.specMid.length === SPEC_BANDS) {
-                    for (let b = 0; b < SPEC_BANDS; b++) {
+                if (data.specMid && data.specMid.length === _specBands) {
+                    for (let b = 0; b < _specBands; b++) {
                         _specTargetMid[b]  = data.specMid[b];
                         _specTargetSide[b] = data.specSide[b];
                     }
@@ -2228,8 +2366,8 @@ function wireMeters() {
 
                 if (_specAvgOn) {
                     _specAvgCount++;
-                    const hasMs = data.specMid && data.specMid.length === SPEC_BANDS;
-                    for (let b = 0; b < SPEC_BANDS; b++) {
+                    const hasMs = data.specMid && data.specMid.length === _specBands;
+                    for (let b = 0; b < _specBands; b++) {
                         const pL = Math.pow(10, data.specL[b] / 10);
                         const pR = Math.pow(10, data.specR[b] / 10);
                         _specAvgL[b] += (pL - _specAvgL[b]) / _specAvgCount;
@@ -2248,14 +2386,6 @@ function wireMeters() {
     } catch (e) {
         debugLog(`✗ Error adding meterLevels listener: ${e.message}`, 'ERROR');
     }
-    setupVectorscopeZoom();
-    setupSpectrumControls();
-    drawVectorscope();
-    drawSpectrum();
-
-    // Render iniziale delle strip (visibili anche in silenzio)
-    _drawSegmentMeter('balanceCanvas', 0, 'balance');
-    _drawSegmentMeter('correlationCanvas', 0, 'correlation');
 }
 
 function changeVsZoom(direction) {

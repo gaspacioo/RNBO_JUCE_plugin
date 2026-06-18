@@ -127,7 +127,7 @@ WebBrowserAudioEditor::WebBrowserAudioEditor (CustomAudioProcessor* const p,
     }
 
     setResizable (true, true);
-    setResizeLimits (600, 650, 720, 1200);
+    setResizeLimits (870, 360, 1500, 900);
 
     addAndMakeVisible (_webComponent);
 
@@ -136,7 +136,7 @@ WebBrowserAudioEditor::WebBrowserAudioEditor (CustomAudioProcessor* const p,
     _webComponent.goToURL (kDevServerAddress);
     //_webComponent.goToURL(WebBrowserComponent::getResourceProviderRoot());
 
-    setSize (600, 830);
+    setSize (870, 360);
 
     startTimerHz (60);
 }
@@ -217,7 +217,7 @@ void WebBrowserAudioEditor::sendMeterLevelsToWebView()
 
         if (_audioProcessor->_specNewData.load (std::memory_order_acquire))
         {
-            constexpr int numBands = CustomAudioProcessor::kSpecBands;
+            const int numBands = _audioProcessor->_specBandCount.load (std::memory_order_acquire);
 
             juce::Array<juce::var> bandsL, bandsR, bandsMid, bandsSide;
             bandsL.ensureStorageAllocated (numBands);
@@ -238,6 +238,7 @@ void WebBrowserAudioEditor::sendMeterLevelsToWebView()
                 }
             }
 
+            payload->setProperty ("specBandCount", numBands);
             payload->setProperty ("specL", juce::var (bandsL));
             payload->setProperty ("specR", juce::var (bandsR));
             payload->setProperty ("specMid",  juce::var (bandsMid));

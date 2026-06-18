@@ -51,6 +51,10 @@ public:
     // Reset dell'Integrated LUFS (chiamato dal tasto RESET via native function)
     void resetLufsIntegrated();
 
+    // Cambia il numero di bande dello spettro (96/192/256), richiesto dalla UI.
+    // Applicato sul thread audio al prossimo blocco. n viene limitato a [32, kSpecBandsMax].
+    void setSpecBandCount (int n);
+
     static constexpr int kScopeBufferSize = 4096;
 
     juce::AbstractFifo _scopeFifo { kScopeBufferSize };
@@ -60,16 +64,18 @@ public:
     static constexpr int kFftOrder    = 11;
     static constexpr int kFftSize     = 1 << kFftOrder;
     static constexpr int kFftHop      = kFftSize / 2;
-    static constexpr int kFftLowOrder = 13;
+    static constexpr int kFftLowOrder = 14;                 // 16384 pt → ~2.7 Hz/bin a 44100 Hz
     static constexpr int kFftLowSize  = 1 << kFftLowOrder;
     static constexpr int kFftLowHop   = kFftLowSize / 4;
-    static constexpr int kSpecBands   = 96;
-    static constexpr float kSpecLowCrossHz = 300.0f;
+    static constexpr int kSpecBands    = 96;
+    static constexpr int kSpecBandsMax = 256;
+    static constexpr float kSpecLowCrossHz = 500.0f;        // più bande usano la FFT ad alta risoluzione
 
-    float _specMagL[kSpecBands] = {};
-    float _specMagR[kSpecBands] = {};
-    float _specMagMid[kSpecBands]  = {};
-    float _specMagSide[kSpecBands] = {};
+    float _specMagL[kSpecBandsMax] = {};
+    float _specMagR[kSpecBandsMax] = {};
+    float _specMagMid[kSpecBandsMax]  = {};
+    float _specMagSide[kSpecBandsMax] = {};
+    std::atomic<int>      _specBandCount { kSpecBands };   // bande attive correnti
     std::atomic<bool>     _specNewData { false };
     juce::CriticalSection _specLock;
 
@@ -78,6 +84,7 @@ private:
     void fillScopeFifo (const juce::AudioBuffer<float>& buffer);
     void feedSpectrum (const juce::AudioBuffer<float>& buffer);
     void computeSpectrumFrame (bool lowBands);
+    void rebuildSpecBands (int count);   // ricalcola la band-map per il nuovo conteggio (thread audio)
 
     // ===== LUFS (ITU-R BS.1770) =====
     void prepareLufs (double sampleRate);
@@ -127,9 +134,12 @@ private:
     int   _fftLowHopCount = 0;
     float _fftWorkBuf[kFftLowSize * 2] = {};
 
-    int  _bandLo[kSpecBands]     = {};
-    int  _bandHi[kSpecBands]     = {};
-    bool _bandUseLow[kSpecBands] = {};
+    int  _bandLo[kSpecBandsMax]     = {};
+    int  _bandHi[kSpecBandsMax]     = {};
+    bool _bandUseLow[kSpecBandsMax] = {};
+
+    double _specSampleRate = 48000.0;        // memorizzato per ricalcolare la band-map
+    std::atomic<int> _pendingSpecBandCount { 0 };   // 0 = nessun cambio in attesa
 
     static constexpr RNBO::MessageTag tagInRmsL  = RNBO::TAG ("in_rms_L");
     static constexpr RNBO::MessageTag tagInRmsR  = RNBO::TAG ("in_rms_R");
