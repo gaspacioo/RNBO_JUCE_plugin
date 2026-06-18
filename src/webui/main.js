@@ -2228,34 +2228,19 @@ function wireMSMatrix() {
         });
     }
 
-    const resetGainOnce = (state) => {
-        let done = false;
-        const tryReset = () => {
-            if (done) return;
-            const props = state.properties;
-            if (!props || !(Number(props.end) - Number(props.start) > PARAM_RANGE_MIN_SPAN)) return;
-            done = true;
-            try {
-                state.setNormalisedValue(dbToNorm(0, state));
-            } catch (e) {
-                debugLog('wireMSMatrix: reset gain fallito: ' + e.message, 'WARN');
-            }
-        };
-        state.propertiesChangedEvent.addListener(tryReset);
-        tryReset();
-    };
-    resetGainOnce(ch1Ms);
-    resetGainOnce(ch2Ms);
-    resetGainOnce(ch1Lr);
-    resetGainOnce(ch2Lr);
-    if (muCh1Lr) { try { muCh1Lr.setValue(false); } catch (e) {} }
-    if (muCh2Lr) { try { muCh2Lr.setValue(false); } catch (e) {} }
+    // NB: niente reset dei gain/mute all'avvio. I parametri vivono nel processore e
+    // mantengono il loro valore tra una chiusura e riapertura della finestra: la UI deve
+    // solo leggerli e rifletterli (sync sotto), non sovrascriverli — altrimenti ogni
+    // riapertura riporterebbe gli slider al default.
 
-    // Sync iniziale UI
-    setTimeout(() => {
-        syncA(); syncB();
-        syncMuteA(); syncMuteB();
-    }, 50);
+    // Sync iniziale UI: l'evento delle proprietà arriva quando il range del parametro è
+    // disponibile; ci agganciamo a quello e facciamo comunque un sync ritardato di sicurezza.
+    const syncFromParams = () => { syncA(); syncB(); syncMuteA(); syncMuteB(); };
+    ch1Ms.propertiesChangedEvent.addListener(syncFromParams);
+    ch2Ms.propertiesChangedEvent.addListener(syncFromParams);
+    ch1Lr.propertiesChangedEvent.addListener(syncFromParams);
+    ch2Lr.propertiesChangedEvent.addListener(syncFromParams);
+    setTimeout(syncFromParams, 50);
 
     debugLog('✓ wireMSMatrix completato con toggle L/R', 'SUCCESS');
 }
