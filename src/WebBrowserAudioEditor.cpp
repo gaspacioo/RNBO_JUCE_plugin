@@ -211,7 +211,9 @@ void WebBrowserAudioEditor::sendMeterLevelsToWebView()
         }
     }
 
-    if (++_specSendTick >= 4)
+    // Invia lo spettro alla UI a 30 Hz (timer 60 Hz / 2) per ridurre la latenza
+    // di aggiornamento; costa più banda IPC ma lo spettro reagisce molto prima.
+    if (++_specSendTick >= 2)
     {
         _specSendTick = 0;
 

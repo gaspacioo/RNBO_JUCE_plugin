@@ -17,6 +17,8 @@ public:
                           const nlohmann::json& presets,
                           const RNBO::BinaryData& data);
 
+    ~CustomAudioProcessor() override;
+
     juce::AudioProcessorEditor* createEditor() override;
 
     void handleMessageEvent (const RNBO::MessageEvent& event) override;
@@ -63,7 +65,9 @@ public:
 
     static constexpr int kFftOrder    = 11;
     static constexpr int kFftSize     = 1 << kFftOrder;     // 2048 pt @ full rate (medie/alte)
-    static constexpr int kFftHop      = kFftSize / 2;
+    // Hop = N/4 (75% overlap): raddoppia il frame rate delle medie/alte (~12 ms invece di
+    // ~23 ms) per più reattività. Costa 2× FFT sul path alto (ora fuori dal thread audio).
+    static constexpr int kFftHop      = kFftSize / 4;
     // Path basse: il segnale viene filtrato (anti-alias) e decimato di kSpecDecim prima
     // della FFT. Una FFT da 1024 pt a sr/16 copre la stessa finestra temporale (~372 ms a
     // 44100 Hz) e la stessa risoluzione (~2.7 Hz/bin) di una 16384 pt a full rate, ma costa
@@ -74,25 +78,55 @@ public:
     static constexpr int kFftLowHop   = kFftLowSize / 16;   // 64 camp. decimati ≈ 23 ms
     static constexpr int kSpecBands    = 96;
     static constexpr int kSpecBandsMax = 256;
-    // Crossover alto: tutte le basse (≤ 500 Hz) passano per la FFT fine decimata, che ha
-    // lobo stretto e niente sbavature. La Nyquist decimata (~1378 Hz a 44100) lascia ampio
-    // margine. Le bande sopra usano la FFT corta, dove la risoluzione grossolana non disturba.
-    static constexpr float kSpecLowCrossHz = 500.0f;
+    // Crossover a crossfade invece che a gradino: sotto kSpecXfadeLoHz le bande vengono
+    // SOLO dalla FFT fine decimata (alta risoluzione, ma temporalmente "statica" per via
+    // della finestra lunga ~372 ms); sopra kSpecXfadeHiHz SOLO dalla FFT corta (vivace).
+    // In mezzo le due stime vengono fuse con peso graduale → niente linea netta e la
+    // risoluzione fine "arriva" più in alto (fino a ~900 Hz) rispetto al taglio secco a 500.
+    // Limite superiore vincolato dalla Nyquist decimata (~1378 Hz) e dal filtro anti-alias
+    // (passabanda piatto fin ~900 Hz): oltre, il path basso non è più affidabile.
+    static constexpr float kSpecXfadeLoHz = 500.0f;
+    static constexpr float kSpecXfadeHiHz = 900.0f;
 
     float _specMagL[kSpecBandsMax] = {};
     float _specMagR[kSpecBandsMax] = {};
     float _specMagMid[kSpecBandsMax]  = {};
     float _specMagSide[kSpecBandsMax] = {};
+
+    // Ultima magnitudine grezza (dB, non smussata) calcolata da ciascun path, per fondere
+    // i due path nelle bande di transizione. Il path basso si aggiorna più di rado ma
+    // cambia lentamente, quindi il suo ultimo valore è sempre buono per la fusione.
+    float _specRawLowL[kSpecBandsMax]    = {};
+    float _specRawLowR[kSpecBandsMax]    = {};
+    float _specRawLowMid[kSpecBandsMax]  = {};
+    float _specRawLowSide[kSpecBandsMax] = {};
+    float _specRawHighL[kSpecBandsMax]    = {};
+    float _specRawHighR[kSpecBandsMax]    = {};
+    float _specRawHighMid[kSpecBandsMax]  = {};
+    float _specRawHighSide[kSpecBandsMax] = {};
+
     std::atomic<int>      _specBandCount { kSpecBands };   // bande attive correnti
     std::atomic<bool>     _specNewData { false };
     juce::CriticalSection _specLock;
 
 private:
+    // Frame dello spettro catturato dal thread audio e consumato dal thread spettro.
+    // Tiene una copia linearizzata (ordine cronologico) di L/R alla risoluzione del path.
+    struct SpecFrame
+    {
+        int   len      = 0;        // kFftSize (path alto) o kFftLowSize (path basso)
+        bool  lowBands = false;
+        float L[kFftSize] = {};
+        float R[kFftSize] = {};
+    };
+
     void measurePeaks (const juce::AudioBuffer<float>& buffer, bool isOutput);
     void fillScopeFifo (const juce::AudioBuffer<float>& buffer);
     void feedSpectrum (const juce::AudioBuffer<float>& buffer);
-    void computeSpectrumFrame (bool lowBands);
-    void rebuildSpecBands (int count);          // ricalcola la band-map per il nuovo conteggio (thread audio)
+    void enqueueSpecFrame (bool lowBands);              // thread audio: cattura un frame e sveglia il consumer
+    void specThreadRun();                               // loop del thread spettro (FFT fuori dal callback audio)
+    void computeSpectrumFrame (const SpecFrame& frame); // thread spettro: FFT + bande + smoothing
+    void rebuildSpecBands (int count);          // ricalcola la band-map (thread spettro)
     void prepareDecimationFilter (double sampleRate);   // coeff. Butterworth anti-alias per il path basse
 
     // ===== LUFS (ITU-R BS.1770) =====
@@ -134,34 +168,39 @@ private:
     float _hannWindow[kFftSize]       = {};
     float _hannWindowLow[kFftLowSize] = {};
 
-    // Ring per il path medie/alte (full rate, finestra = kFftSize)
+    // Ring per il path medie/alte (full rate, finestra = kFftSize). Solo L/R: gli
+    // spettri Mid/Side si ricavano in frequenza in computeSpectrumFrame.
     float _rawRingL[kFftSize] = {};
     float _rawRingR[kFftSize] = {};
-    float _rawRingMid[kFftSize]  = {};
-    float _rawRingSide[kFftSize] = {};
     int   _rawRingPos  = 0;
     int   _fftHopCount = 0;
 
     // Ring per il path basse (rate decimato sr/kSpecDecim, finestra = kFftLowSize)
     float _decRingL[kFftLowSize] = {};
     float _decRingR[kFftLowSize] = {};
-    float _decRingMid[kFftLowSize]  = {};
-    float _decRingSide[kFftLowSize] = {};
     int   _decRingPos     = 0;
     int   _fftLowHopCount = 0;
     int   _decimCounter   = 0;   // campioni raw accumulati verso il prossimo campione decimato
 
     // Filtro anti-aliasing (Butterworth 6° ordine = 3 biquad) applicato prima della
-    // decimazione; coefficienti condivisi, stato indipendente per canale L/R/Mid/Side.
+    // decimazione; coefficienti condivisi, stato indipendente per canale L/R.
     static constexpr int kAaStages = 3;
     Biquad      _aaCoef[kAaStages];
-    BiquadState _aaState[4][kAaStages];
+    BiquadState _aaState[2][kAaStages];
 
-    float _fftWorkBuf[kFftSize * 2] = {};
+    // Due buffer di lavoro FFT: L in _fftWorkBuf, R in _fftWorkBufR, così i bin di
+    // entrambi sono disponibili insieme per derivare Mid/Side.
+    float _fftWorkBuf[kFftSize * 2]  = {};
+    float _fftWorkBufR[kFftSize * 2] = {};
 
-    int  _bandLo[kSpecBandsMax]     = {};
-    int  _bandHi[kSpecBandsMax]     = {};
-    bool _bandUseLow[kSpecBandsMax] = {};
+    // Range di bin per ciascun path. Una banda nella zona di transizione ha entrambi
+    // validi; sotto la zona solo Low, sopra solo High. _bandBlend pesa la fusione:
+    // 0 = solo path basso (fine), 1 = solo path alto (vivace), in mezzo crossfade.
+    int   _bandLoLow[kSpecBandsMax]  = {};
+    int   _bandHiLow[kSpecBandsMax]  = {};
+    int   _bandLoHigh[kSpecBandsMax] = {};
+    int   _bandHiHigh[kSpecBandsMax] = {};
+    float _bandBlend[kSpecBandsMax]  = {};
 
     // Smoothing per-banda (attacco/decadimento): graduato per frequenza così la risposta
     // varia con continuità e la cucitura tra path decimato e path corto è impercettibile.
@@ -170,6 +209,24 @@ private:
 
     double _specSampleRate = 48000.0;        // memorizzato per ricalcolare la band-map
     std::atomic<int> _pendingSpecBandCount { 0 };   // 0 = nessun cambio in attesa
+
+    // ===== Handoff spettro audio → thread dedicato =====
+    // Il thread audio cattura i frame (enqueueSpecFrame) in una coda SPSC lock-free;
+    // il thread spettro li consuma e fa la FFT fuori dal callback real-time.
+    static constexpr int kSpecFrameSlots = 16;
+    SpecFrame         _specFrames[kSpecFrameSlots];
+    juce::AbstractFifo _specFrameFifo { kSpecFrameSlots };
+
+    class SpecThread : public juce::Thread
+    {
+    public:
+        explicit SpecThread (CustomAudioProcessor& owner)
+            : juce::Thread ("SimpleMeter Spectrum"), _owner (owner) {}
+        void run() override { _owner.specThreadRun(); }
+    private:
+        CustomAudioProcessor& _owner;
+    };
+    SpecThread _specThread { *this };
 
     static constexpr RNBO::MessageTag tagInRmsL  = RNBO::TAG ("in_rms_L");
     static constexpr RNBO::MessageTag tagInRmsR  = RNBO::TAG ("in_rms_R");

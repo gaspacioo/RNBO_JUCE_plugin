@@ -28,10 +28,10 @@ namespace
         if (samples == nullptr || numSamples <= 0)
             return kSilenceDb;
 
-        float peak = 0.0f;
-
-        for (int i = 0; i < numSamples; ++i)
-            peak = std::max (peak, std::abs (samples[i]));
+        // findMinAndMax è vettorizzato (SIMD): il picco è il maggiore in valore assoluto
+        // tra minimo e massimo del blocco.
+        const auto range = juce::FloatVectorOperations::findMinAndMax (samples, numSamples);
+        const float peak = juce::jmax (std::abs (range.getStart()), std::abs (range.getEnd()));
 
         return linearPeakToDb (peak);
     }
@@ -77,6 +77,12 @@ CustomAudioProcessor::CustomAudioProcessor (const nlohmann::json& patcher_desc,
 {
 }
 
+CustomAudioProcessor::~CustomAudioProcessor()
+{
+    // Ferma il thread spettro prima che i membri che usa vengano distrutti.
+    _specThread.stopThread (1000);
+}
+
 juce::AudioProcessorEditor* CustomAudioProcessor::createEditor()
 {
 #if defined(RNBO_EDITOR_NATIVE)
@@ -90,6 +96,10 @@ juce::AudioProcessorEditor* CustomAudioProcessor::createEditor()
 
 void CustomAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
+    // Ferma il thread spettro mentre azzeriamo band-map, ring e FIFO: così nessuno
+    // legge stato dello spettro a metà reset. Viene riavviato in fondo.
+    _specThread.stopThread (1000);
+
     RNBO::JuceAudioProcessor::prepareToPlay (sampleRate, samplesPerBlock);
 
     const float sr = static_cast<float> (sampleRate > 0.0 ? sampleRate : 44100.0);
@@ -134,12 +144,8 @@ void CustomAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     _decimCounter   = 0;
     std::fill (std::begin (_rawRingL), std::end (_rawRingL), 0.0f);
     std::fill (std::begin (_rawRingR), std::end (_rawRingR), 0.0f);
-    std::fill (std::begin (_rawRingMid),  std::end (_rawRingMid),  0.0f);
-    std::fill (std::begin (_rawRingSide), std::end (_rawRingSide), 0.0f);
     std::fill (std::begin (_decRingL), std::end (_decRingL), 0.0f);
     std::fill (std::begin (_decRingR), std::end (_decRingR), 0.0f);
-    std::fill (std::begin (_decRingMid),  std::end (_decRingMid),  0.0f);
-    std::fill (std::begin (_decRingSide), std::end (_decRingSide), 0.0f);
 
     prepareDecimationFilter (sr);
 
@@ -149,6 +155,11 @@ void CustomAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     std::fill (std::begin (_specMagSide), std::end (_specMagSide), kSilenceDb);
 
     prepareLufs (sampleRate);
+
+    // Riparti puliti e fai ripartire il thread spettro a priorità alta, così consuma
+    // i frame prontamente (meno latenza) senza però competere col thread audio realtime.
+    _specFrameFifo.reset();
+    _specThread.startThread (juce::Thread::Priority::high);
 }
 
 //==============================================================================
@@ -357,22 +368,38 @@ void CustomAudioProcessor::fillScopeFifo (const juce::AudioBuffer<float>& buffer
 {
     const int numSamples  = buffer.getNumSamples();
     const int numChannels = buffer.getNumChannels();
+    if (numSamples <= 0)
+        return;
+
     const auto* chL = buffer.getReadPointer (0);
     const auto* chR = numChannels > 1 ? buffer.getReadPointer (1) : chL;
 
-    for (int i = 0; i < numSamples; i += _scopeDownsample)
-    {
-        int start1, size1, start2, size2;
-        _scopeFifo.prepareToWrite (1, start1, size1, start2, size2);
+    // Punti decimati prodotti da questo blocco (fase di decimazione per-blocco, come prima).
+    const int numPoints = (numSamples + _scopeDownsample - 1) / _scopeDownsample;
 
-        if (size1 > 0)
+    // Una sola prenotazione del FIFO, scrittura in (al più) due segmenti contigui:
+    // niente più prepareToWrite/finishedWrite per ogni singolo campione.
+    int start1, size1, start2, size2;
+    _scopeFifo.prepareToWrite (numPoints, start1, size1, start2, size2);
+
+    int written = 0;
+    for (int seg = 0; seg < 2; ++seg)
+    {
+        const int start = (seg == 0) ? start1 : start2;
+        const int size  = (seg == 0) ? size1  : size2;
+
+        for (int j = 0; j < size; ++j)
         {
+            const int i = (written + j) * _scopeDownsample;   // < numSamples per costruzione
             // Codifica M/S: X = Side (L−R), Y = Mid (L+R)
-            _scopeBufX[start1] = (chL[i] - chR[i]) * 0.5f;
-            _scopeBufY[start1] = (chL[i] + chR[i]) * 0.5f;
-            _scopeFifo.finishedWrite (1);
+            _scopeBufX[start + j] = (chL[i] - chR[i]) * 0.5f;
+            _scopeBufY[start + j] = (chL[i] + chR[i]) * 0.5f;
         }
+
+        written += size;
     }
+
+    _scopeFifo.finishedWrite (size1 + size2);
 }
 
 void CustomAudioProcessor::feedSpectrum (const juce::AudioBuffer<float>& buffer)
@@ -383,16 +410,8 @@ void CustomAudioProcessor::feedSpectrum (const juce::AudioBuffer<float>& buffer)
     if (numChannels <= 0 || numSamples <= 0)
         return;
 
-    // Cambio del numero di bande richiesto dalla UI: applicato qui (thread audio)
-    // così la band-map e i mag non sono mai modificati mentre vengono letti altrove.
-    const int pending = _pendingSpecBandCount.exchange (0, std::memory_order_relaxed);
-    if (pending != 0 && pending != _specBandCount.load (std::memory_order_relaxed))
-        rebuildSpecBands (pending);
-
     const auto* chL = buffer.getReadPointer (0);
     const auto* chR = numChannels > 1 ? buffer.getReadPointer (1) : chL;
-
-    constexpr float msScale = 0.70710678f;   // 1/sqrt(2): codifica M/S a energia costante
 
     // Biquad Direct Form I (in double): un campione attraverso una sezione.
     auto biquad = [] (const Biquad& c, BiquadState& s, double x) -> double
@@ -403,50 +422,45 @@ void CustomAudioProcessor::feedSpectrum (const juce::AudioBuffer<float>& buffer)
         return y;
     };
 
+    // Mid/Side non vengono né accumulati né filtrati qui: la FFT è lineare, quindi gli
+    // spettri M/S si ricavano esattamente da quelli di L/R in computeSpectrumFrame
+    // (M = (L+R)/√2, S = (L−R)/√2). Così bastano 2 ring e 2 catene anti-alias invece di 4.
     for (int i = 0; i < numSamples; ++i)
     {
-        const float l    = chL[i];
-        const float r    = chR[i];
-        const float mid  = (l + r) * msScale;
-        const float side = (l - r) * msScale;
+        const float l = chL[i];
+        const float r = chR[i];
 
         // --- Path medie/alte: ring a full rate ---
-        _rawRingL[_rawRingPos]    = l;
-        _rawRingR[_rawRingPos]    = r;
-        _rawRingMid[_rawRingPos]  = mid;
-        _rawRingSide[_rawRingPos] = side;
+        _rawRingL[_rawRingPos] = l;
+        _rawRingR[_rawRingPos] = r;
         _rawRingPos = (_rawRingPos + 1) & (kFftSize - 1);
 
         if (++_fftHopCount >= kFftHop)
         {
             _fftHopCount = 0;
-            computeSpectrumFrame (false);
+            enqueueSpecFrame (false);   // copia il frame; la FFT avviene sul thread dedicato
         }
 
         // --- Path basse: filtro anti-alias (cascata di biquad) poi decimazione ---
-        double fL = l, fR = r, fM = mid, fS = side;
+        double fL = l, fR = r;
         for (int s = 0; s < kAaStages; ++s)
         {
             fL = biquad (_aaCoef[s], _aaState[0][s], fL);
             fR = biquad (_aaCoef[s], _aaState[1][s], fR);
-            fM = biquad (_aaCoef[s], _aaState[2][s], fM);
-            fS = biquad (_aaCoef[s], _aaState[3][s], fS);
         }
 
         if (++_decimCounter >= kSpecDecim)
         {
             _decimCounter = 0;
 
-            _decRingL[_decRingPos]    = (float) fL;
-            _decRingR[_decRingPos]    = (float) fR;
-            _decRingMid[_decRingPos]  = (float) fM;
-            _decRingSide[_decRingPos] = (float) fS;
+            _decRingL[_decRingPos] = (float) fL;
+            _decRingR[_decRingPos] = (float) fR;
             _decRingPos = (_decRingPos + 1) & (kFftLowSize - 1);
 
             if (++_fftLowHopCount >= kFftLowHop)
             {
                 _fftLowHopCount = 0;
-                computeSpectrumFrame (true);
+                enqueueSpecFrame (true);   // copia il frame; la FFT avviene sul thread dedicato
             }
         }
     }
@@ -467,57 +481,94 @@ void CustomAudioProcessor::rebuildSpecBands (int count)
     const float fMin    = 20.0f;
     const float fMax    = std::min (20000.0f, nyquist);
 
+    const int   halfNLow  = kFftLowSize / 2;
+    const int   halfNHigh = kFftSize / 2;
+    const float nyqLow    = nyquist / (float) kSpecDecim;   // Nyquist del segnale decimato
+    const float frameComp = (float) kFftHop / (float) (kFftSize / 2);
+
     for (int b = 0; b < count; ++b)
     {
         // Bordi di banda log-spaced: banda b copre [edge(b), edge(b+1))
         const float fLo = fMin * std::pow (fMax / fMin, (float) b       / (float) count);
         const float fHi = fMin * std::pow (fMax / fMin, (float) (b + 1) / (float) count);
-
-        // Sotto il crossover la banda usa la FFT decimata (più bin per ottava). In quel
-        // caso la Nyquist di riferimento è quella del segnale decimato (sr / 2·kSpecDecim).
-        const bool  useLow      = fHi < kSpecLowCrossHz;
-        const int   halfN       = (useLow ? kFftLowSize : kFftSize) / 2;
-        const float bandNyquist = useLow ? nyquist / (float) kSpecDecim : nyquist;
-
-        int lo = (int) std::floor (fLo / bandNyquist * (float) halfN);
-        int hi = (int) std::ceil  (fHi / bandNyquist * (float) halfN) - 1;
-
-        lo = juce::jlimit (1, halfN, lo);
-        hi = juce::jlimit (lo, halfN, hi);
-
-        _bandLo[b]     = lo;
-        _bandHi[b]     = hi;
-        _bandUseLow[b] = useLow;
-
-        // Smoothing graduato per frequenza (centro geometrico della banda).
         const float fCenter = std::sqrt (fLo * fHi);
 
-        if (useLow)
+        // Peso di crossfade: 0 = solo path basso (fine), 1 = solo path alto (vivace).
+        // smoothstep sul log della frequenza → transizione morbida, niente linea netta.
+        float blend;
+        if      (fCenter <= kSpecXfadeLoHz) blend = 0.0f;
+        else if (fCenter >= kSpecXfadeHiHz) blend = 1.0f;
+        else
         {
-            // Path decimato: la finestra lunga (~372 ms) domina già la lentezza, quindi
-            // lo smoothing resta leggero per non aggiungere altro ritardo.
+            const float t = std::log (fCenter / kSpecXfadeLoHz)
+                          / std::log (kSpecXfadeHiHz / kSpecXfadeLoHz);
+            blend = t * t * (3.0f - 2.0f * t);
+        }
+        _bandBlend[b] = blend;
+
+        // Bin sul path basso (decimato): usati quando blend < 1.
+        if (blend < 1.0f)
+        {
+            int lo = (int) std::floor (fLo / nyqLow * (float) halfNLow);
+            int hi = (int) std::ceil  (fHi / nyqLow * (float) halfNLow) - 1;
+            lo = juce::jlimit (1, halfNLow, lo);
+            hi = juce::jlimit (lo, halfNLow, hi);
+            _bandLoLow[b] = lo;
+            _bandHiLow[b] = hi;
+        }
+        else { _bandLoLow[b] = 1; _bandHiLow[b] = 0; }   // range vuoto: non verrà letto
+
+        // Bin sul path alto (full rate): usati quando blend > 0.
+        if (blend > 0.0f)
+        {
+            int lo = (int) std::floor (fLo / nyquist * (float) halfNHigh);
+            int hi = (int) std::ceil  (fHi / nyquist * (float) halfNHigh) - 1;
+            lo = juce::jlimit (1, halfNHigh, lo);
+            hi = juce::jlimit (lo, halfNHigh, hi);
+            _bandLoHigh[b] = lo;
+            _bandHiHigh[b] = hi;
+        }
+        else { _bandLoHigh[b] = 1; _bandHiHigh[b] = 0; }
+
+        // Smoothing temporale per banda.
+        if (blend <= 0.0f)
+        {
+            // Path basso puro: la finestra lunga (~372 ms) domina già la lentezza,
+            // EMA leggera per non aggiungere altro ritardo.
             _bandAtk[b] = 0.30f;
             _bandDcy[b] = 0.78f;
         }
         else
         {
-            // Path corto: subito sopra il crossover emuliamo la lentezza della finestra
-            // lunga (alpha alto → stessa risposta delle basse, niente scalino), poi
-            // rilassiamo verso l'acuto dove la reattività è desiderata.
+            // Graduato per frequenza: calmo nella zona di transizione (così si fonde col
+            // path fine senza essere nervoso), reattivo verso l'acuto. Compensazione per
+            // frame rate (a' = a^(hop/(N/2))) così la costante di tempo non dipende da kFftHop.
             const float u = juce::jlimit (0.0f, 1.0f,
-                std::log (fCenter / kSpecLowCrossHz) / std::log (fMax / kSpecLowCrossHz));
-            _bandAtk[b] = juce::jmap (u, 0.90f, 0.15f);
-            _bandDcy[b] = juce::jmap (u, 0.90f, 0.62f);
+                std::log (fCenter / kSpecXfadeLoHz) / std::log (fMax / kSpecXfadeLoHz));
+            _bandAtk[b] = std::pow (juce::jmap (u, 0.90f, 0.45f), frameComp);
+            _bandDcy[b] = std::pow (juce::jmap (u, 0.94f, 0.82f), frameComp);
         }
     }
 
-    // Riparti da silenzio sulle bande attive: la mappatura bin→banda è cambiata
-    std::fill (_specMagL,    _specMagL    + count, kSilenceDb);
-    std::fill (_specMagR,    _specMagR    + count, kSilenceDb);
-    std::fill (_specMagMid,  _specMagMid  + count, kSilenceDb);
-    std::fill (_specMagSide, _specMagSide + count, kSilenceDb);
-
-    _specBandCount.store (count, std::memory_order_release);
+    // Riparti da silenzio sulle bande attive: la mappatura bin→banda è cambiata.
+    // Sotto lock perché ora rebuild gira sul thread spettro, mentre l'editor legge
+    // _specMag*/_specBandCount: count e magnitudini devono cambiare in modo atomico.
+    {
+        const juce::ScopedLock lock (_specLock);
+        std::fill (_specMagL,    _specMagL    + count, kSilenceDb);
+        std::fill (_specMagR,    _specMagR    + count, kSilenceDb);
+        std::fill (_specMagMid,  _specMagMid  + count, kSilenceDb);
+        std::fill (_specMagSide, _specMagSide + count, kSilenceDb);
+        std::fill (_specRawLowL,    _specRawLowL    + count, kSilenceDb);
+        std::fill (_specRawLowR,    _specRawLowR    + count, kSilenceDb);
+        std::fill (_specRawLowMid,  _specRawLowMid  + count, kSilenceDb);
+        std::fill (_specRawLowSide, _specRawLowSide + count, kSilenceDb);
+        std::fill (_specRawHighL,    _specRawHighL    + count, kSilenceDb);
+        std::fill (_specRawHighR,    _specRawHighR    + count, kSilenceDb);
+        std::fill (_specRawHighMid,  _specRawHighMid  + count, kSilenceDb);
+        std::fill (_specRawHighSide, _specRawHighSide + count, kSilenceDb);
+        _specBandCount.store (count, std::memory_order_release);
+    }
 }
 
 void CustomAudioProcessor::prepareDecimationFilter (double sampleRate)
@@ -525,11 +576,12 @@ void CustomAudioProcessor::prepareDecimationFilter (double sampleRate)
     const double fs = sampleRate > 0.0 ? sampleRate : 44100.0;
 
     // Nyquist dopo la decimazione = fs / (2 · kSpecDecim) ≈ 1378 Hz a 44100 Hz.
-    // Il taglio va sopra il crossover (così il crossover resta nella banda passante piatta)
-    // ma ben sotto la Nyquist decimata. Le frequenze che potrebbero ripiegarsi nella zona
-    // mostrata (≥ ~2,2 kHz) cadono > 50 dB sotto con un Butterworth di 6° ordine.
+    // Il taglio deve coprire tutta la zona di crossfade (la banda passante piatta deve
+    // arrivare fin sopra kSpecXfadeHiHz), ma restare ben sotto la Nyquist decimata. Le
+    // frequenze che potrebbero ripiegarsi nella zona mostrata cadono molto sotto con un
+    // Butterworth di 6° ordine.
     const double decNyquist = fs / (2.0 * (double) kSpecDecim);
-    const double fc         = std::min ((double) kSpecLowCrossHz * 1.6, decNyquist * 0.7);
+    const double fc         = std::min ((double) kSpecXfadeHiHz * 1.1, decNyquist * 0.7);
 
     // Q delle 3 sezioni biquad di un Butterworth di 6° ordine.
     const double q[kAaStages] = { 0.51763809, 0.70710678, 1.93185165 };
@@ -554,9 +606,67 @@ void CustomAudioProcessor::prepareDecimationFilter (double sampleRate)
             st = {};
 }
 
-void CustomAudioProcessor::computeSpectrumFrame (bool lowBands)
+void CustomAudioProcessor::enqueueSpecFrame (bool lowBands)
 {
-    const int numBands = _specBandCount.load (std::memory_order_relaxed);
+    // Thread audio: cattura una copia coerente del ring nel prossimo slot libero e
+    // sveglia il thread spettro. Niente FFT qui → il callback audio resta leggero.
+    int s1, sz1, s2, sz2;
+    _specFrameFifo.prepareToWrite (1, s1, sz1, s2, sz2);
+    if (sz1 <= 0)
+        return;   // coda piena: il consumer è in ritardo, salta questo frame
+
+    SpecFrame& f = _specFrames[s1];
+    const int fftLen  = lowBands ? kFftLowSize : kFftSize;
+    const int ringPos = lowBands ? _decRingPos : _rawRingPos;
+    const int mask    = fftLen - 1;
+    const float* ringL = lowBands ? _decRingL : _rawRingL;
+    const float* ringR = lowBands ? _decRingR : _rawRingR;
+
+    f.lowBands = lowBands;
+    f.len      = fftLen;
+    for (int k = 0; k < fftLen; ++k)
+    {
+        const int idx = (ringPos + k) & mask;   // ordine cronologico crescente
+        f.L[k] = ringL[idx];
+        f.R[k] = ringR[idx];
+    }
+
+    _specFrameFifo.finishedWrite (1);
+    _specThread.notify();
+}
+
+void CustomAudioProcessor::specThreadRun()
+{
+    // Thread dedicato: consuma i frame catturati dal thread audio e fa la FFT qui,
+    // fuori dal callback real-time. Anche il cambio del numero di bande avviene su
+    // questo thread, così band-map e magnitudini non sono mai mutate mentre l'audio scrive.
+    while (! _specThread.threadShouldExit())
+    {
+        const int pending = _pendingSpecBandCount.exchange (0, std::memory_order_relaxed);
+        if (pending != 0 && pending != _specBandCount.load (std::memory_order_relaxed))
+            rebuildSpecBands (pending);
+
+        while (_specFrameFifo.getNumReady() > 0 && ! _specThread.threadShouldExit())
+        {
+            int s1, sz1, s2, sz2;
+            _specFrameFifo.prepareToRead (1, s1, sz1, s2, sz2);
+            const int slot = sz1 > 0 ? s1 : s2;
+            if (sz1 + sz2 <= 0)
+                break;
+
+            computeSpectrumFrame (_specFrames[slot]);
+            _specFrameFifo.finishedRead (1);
+        }
+
+        _specThread.wait (5);   // svegliato da notify(); il timeout è solo una rete di sicurezza
+    }
+}
+
+void CustomAudioProcessor::computeSpectrumFrame (const SpecFrame& frame)
+{
+    const bool  lowBands = frame.lowBands;
+    const int   fftLen   = frame.len;
+    const int   numBands = _specBandCount.load (std::memory_order_relaxed);
 
     float newMagL[kSpecBandsMax];
     float newMagR[kSpecBandsMax];
@@ -565,77 +675,115 @@ void CustomAudioProcessor::computeSpectrumFrame (bool lowBands)
 
     auto&       fft     = lowBands ? _fftLow        : _fft;
     const auto* window  = lowBands ? _hannWindowLow : _hannWindow;
-    const int   fftLen  = lowBands ? kFftLowSize    : kFftSize;
 
     // Normalizzazione ampiezza: 2 / (guadagno coerente finestra · N).
     // Blackman-Harris ha guadagno coerente a0 = 0.35875 (Hann era 0.5).
     const float magScale = 2.0f / (0.35875f * (float) fftLen);
 
-    // Ogni ring ha dimensione esattamente pari alla propria finestra: l'elemento più
-    // vecchio è in ringPos, leggiamo in ordine cronologico crescente.
-    const int   ringPos  = lowBands ? _decRingPos : _rawRingPos;
-    const int   ringMask = fftLen - 1;
+    // Il frame è già linearizzato in ordine cronologico dal thread audio.
+    // Solo 2 FFT (L e R): gli spettri Mid/Side si ricavano per linearità della DFT
+    // direttamente dai bin di L e R (vedi sotto). Costo dimezzato rispetto a 4 FFT.
+    for (int k = 0; k < fftLen; ++k)
+        _fftWorkBuf[k] = frame.L[k] * window[k];
+    std::fill (_fftWorkBuf + fftLen, _fftWorkBuf + fftLen * 2, 0.0f);
+    fft.performRealOnlyForwardTransform (_fftWorkBuf, true);
 
-    const float* ringsLow[4]  = { _decRingL, _decRingR, _decRingMid, _decRingSide };
-    const float* ringsHigh[4] = { _rawRingL, _rawRingR, _rawRingMid, _rawRingSide };
-    const float* const* rings = lowBands ? ringsLow : ringsHigh;
-    float*       results[4]   = { newMagL,   newMagR,   newMagMid,   newMagSide   };
+    for (int k = 0; k < fftLen; ++k)
+        _fftWorkBufR[k] = frame.R[k] * window[k];
+    std::fill (_fftWorkBufR + fftLen, _fftWorkBufR + fftLen * 2, 0.0f);
+    fft.performRealOnlyForwardTransform (_fftWorkBufR, true);
 
-    for (int ch = 0; ch < 4; ++ch)
+    constexpr float msScale = 0.70710678f;   // 1/√2: codifica M/S a energia costante
+
+    // Questo path contribuisce a una banda se è il path basso (blend < 1) o il path alto
+    // (blend > 0). I bin da usare sono quelli calcolati per QUESTO path in rebuildSpecBands.
+    const int* bandLo = lowBands ? _bandLoLow : _bandLoHigh;
+    const int* bandHi = lowBands ? _bandHiLow : _bandHiHigh;
+
+    auto toDb = [magScale] (float maxMagSq)
     {
-        for (int k = 0; k < fftLen; ++k)
-            _fftWorkBuf[k] = rings[ch][(ringPos + k) & ringMask] * window[k];
+        const float mag = std::sqrt (maxMagSq) * magScale;
+        return mag > 1e-6f ? 20.0f * std::log10 (mag) : kSilenceDb;
+    };
 
-        std::fill (_fftWorkBuf + fftLen, _fftWorkBuf + fftLen * 2, 0.0f);
-        fft.performRealOnlyForwardTransform (_fftWorkBuf, true);
+    for (int b = 0; b < numBands; ++b)
+    {
+        const float blend  = _bandBlend[b];
+        const bool  active = lowBands ? (blend < 1.0f) : (blend > 0.0f);
+        if (! active)
+            continue;
 
-        for (int b = 0; b < numBands; ++b)
+        float maxL = 0.0f, maxR = 0.0f, maxM = 0.0f, maxS = 0.0f;
+
+        for (int bin = bandLo[b]; bin <= bandHi[b]; ++bin)
         {
-            if (_bandUseLow[b] != lowBands)
-                continue;
+            const float reL = _fftWorkBuf[bin * 2];
+            const float imL = _fftWorkBuf[bin * 2 + 1];
+            const float reR = _fftWorkBufR[bin * 2];
+            const float imR = _fftWorkBufR[bin * 2 + 1];
 
-            float maxMagSq = 0.0f;
+            // M = (L+R)/√2, S = (L−R)/√2 nel dominio della frequenza: identico
+            // a calcolare la FFT del Mid/Side nel dominio del tempo (DFT lineare).
+            const float reM = (reL + reR) * msScale;
+            const float imM = (imL + imR) * msScale;
+            const float reS = (reL - reR) * msScale;
+            const float imS = (imL - imR) * msScale;
 
-            for (int bin = _bandLo[b]; bin <= _bandHi[b]; ++bin)
-            {
-                const float re = _fftWorkBuf[bin * 2];
-                const float im = _fftWorkBuf[bin * 2 + 1];
-                maxMagSq = std::max (maxMagSq, re * re + im * im);
-            }
-
-            const float mag = std::sqrt (maxMagSq) * magScale;
-            results[ch][b]  = mag > 1e-6f ? 20.0f * std::log10 (mag) : kSilenceDb;
+            maxL = std::max (maxL, reL * reL + imL * imL);
+            maxR = std::max (maxR, reR * reR + imR * imR);
+            maxM = std::max (maxM, reM * reM + imM * imM);
+            maxS = std::max (maxS, reS * reS + imS * imS);
         }
+
+        newMagL[b]    = toDb (maxL);
+        newMagR[b]    = toDb (maxR);
+        newMagMid[b]  = toDb (maxM);
+        newMagSide[b] = toDb (maxS);
     }
 
-    const juce::GenericScopedTryLock<juce::CriticalSection> lock (_specLock);
-
-    if (lock.isLocked())
+    // Lock bloccante: siamo sul thread spettro (non real-time), l'editor tiene il lock
+    // solo per la breve copia delle bande. Aggiorniamo il raw di questo path, fondiamo
+    // col raw dell'altro path (crossfade) e smussiamo nel tempo verso il risultato.
     {
-        // Smoothing asimmetrico: attacco veloce (alpha basso → il valore nuovo pesa
-        // di più, il picco sale subito), decadimento lento (alpha alto → scende piano).
-        // Come un analizzatore hardware: transienti immediati, coda morbida.
-        // Smoothing asimmetrico (attacco veloce, decadimento lento) con coefficienti
-        // graduati per banda: vedi rebuildSpecBands. La risposta varia con continuità
-        // dallo spettro basso (lento) all'alto (reattivo), senza cucitura a 500 Hz.
+        const juce::ScopedLock lock (_specLock);
+
+        // Raw per-path da aggiornare con i valori appena calcolati.
+        float* rawL    = lowBands ? _specRawLowL    : _specRawHighL;
+        float* rawR    = lowBands ? _specRawLowR    : _specRawHighR;
+        float* rawMid  = lowBands ? _specRawLowMid  : _specRawHighMid;
+        float* rawSide = lowBands ? _specRawLowSide : _specRawHighSide;
+
         for (int b = 0; b < numBands; ++b)
         {
-            if (_bandUseLow[b] != lowBands)
+            const float blend  = _bandBlend[b];
+            const bool  active = lowBands ? (blend < 1.0f) : (blend > 0.0f);
+            if (! active)
                 continue;
+
+            rawL[b]    = newMagL[b];
+            rawR[b]    = newMagR[b];
+            rawMid[b]  = newMagMid[b];
+            rawSide[b] = newMagSide[b];
+
+            // Crossfade: l'altro path usa il suo ultimo valore memorizzato (il path basso
+            // cambia lentamente, quindi il suo ultimo valore va sempre bene per la fusione).
+            const float bL    = (1.0f - blend) * _specRawLowL[b]    + blend * _specRawHighL[b];
+            const float bR    = (1.0f - blend) * _specRawLowR[b]    + blend * _specRawHighR[b];
+            const float bMid  = (1.0f - blend) * _specRawLowMid[b]  + blend * _specRawHighMid[b];
+            const float bSide = (1.0f - blend) * _specRawLowSide[b] + blend * _specRawHighSide[b];
 
             const float aAtk = _bandAtk[b];
             const float aDcy = _bandDcy[b];
-
             auto smooth = [aAtk, aDcy] (float cur, float inc)
             {
                 const float a = (inc > cur) ? aAtk : aDcy;
                 return a * cur + (1.0f - a) * inc;
             };
 
-            _specMagL[b]    = smooth (_specMagL[b],    newMagL[b]);
-            _specMagR[b]    = smooth (_specMagR[b],    newMagR[b]);
-            _specMagMid[b]  = smooth (_specMagMid[b],  newMagMid[b]);
-            _specMagSide[b] = smooth (_specMagSide[b], newMagSide[b]);
+            _specMagL[b]    = smooth (_specMagL[b],    bL);
+            _specMagR[b]    = smooth (_specMagR[b],    bR);
+            _specMagMid[b]  = smooth (_specMagMid[b],  bMid);
+            _specMagSide[b] = smooth (_specMagSide[b], bSide);
         }
 
         _specNewData.store (true, std::memory_order_release);

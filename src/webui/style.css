@@ -175,8 +175,8 @@ body {
     flex: 1 1 auto;
     min-height: 112px;
     background: linear-gradient(to top,
-        rgb(91, 195, 88)  0%,
-        rgb(77, 216, 72) 60%,
+        rgb(70, 210, 90)  0%,
+        rgb(70, 210, 90) 60%,
         #ff9d00 90%,
         #ee4a38 96%,
         #ff1900 100%

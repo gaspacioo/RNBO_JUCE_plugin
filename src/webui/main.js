@@ -124,10 +124,11 @@ const clipHold = { input: null, output: null };
 let correlationValue = 0;
 let _vsPendingBatch = null;
 
-const VS_ZOOM_MIN  = 0.25;
+const VS_ZOOM_DEFAULT = 1.0;        // dimensione di base del vectorscope
+const VS_ZOOM_MIN  = VS_ZOOM_DEFAULT; // non si può rimpicciolire sotto la base
 const VS_ZOOM_MAX  = 8.0;
 const VS_ZOOM_STEP = 1.2;
-let _vsZoom          = 1.0;
+let _vsZoom          = VS_ZOOM_DEFAULT;
 let _vsShowOverlay   = true;
 let _vsOverlayCanvas = null;
 let _vsDotsMode      = true;   // true: nuvola di puntini, false: linea continua + cursore
@@ -853,8 +854,8 @@ const SPEC_BAND_STEPS = [96, 192, 256];
 let _specBands = 96;         // conteggio attivo, seguito dal valore confermato dal C++
 const SPEC_DB_RANGES = [-60, -90, -120];  // range ciclabili dal toggle dB
 const SPEC_DB_MAX  = 0;
-const SPEC_ATTACK  = 0.55;  // lerp per frame verso il target in salita
-const SPEC_RELEASE = 0.16;  // discesa più lenta (stile ballistics analogiche)
+const SPEC_ATTACK  = 0.70;  // lerp per frame verso il target in salita (più reattivo)
+const SPEC_RELEASE = 0.35;  // discesa più rapida: meno latenza percepita sui transienti
 const SPEC_F_MIN   = 20;
 const SPEC_F_MAX   = 20000;
 
@@ -2382,6 +2383,26 @@ function changeVsZoom(direction) {
     _vsLastX = null;
     _vsLastY = null;
     saveUiState({ vsZoom: _vsZoom });
+    updateVsZoomButtons();
+}
+
+// Doppio click sul button "−": torna alla dimensione di default
+function resetVsZoom() {
+    _vsZoom = VS_ZOOM_DEFAULT;
+    _vsLastX = null;
+    _vsLastY = null;
+    saveUiState({ vsZoom: _vsZoom });
+    updateVsZoomButtons();
+}
+
+// Grigia/disabilita il button "−" quando si è già alla dimensione di base
+function updateVsZoomButtons() {
+    const btnOut = document.getElementById('vsZoomOut');
+    if (!btnOut) return;
+    const atBase = _vsZoom <= VS_ZOOM_MIN + 1e-6;
+    btnOut.style.opacity      = atBase ? '0.35' : '1';
+    btnOut.style.pointerEvents = atBase ? 'none' : 'auto';
+    btnOut.style.cursor       = atBase ? 'default' : 'pointer';
 }
 
 function setupVectorscopeZoom() {
@@ -2400,7 +2421,10 @@ function setupVectorscopeZoom() {
         _vsShowOverlay = false;
 
     document.getElementById('vsZoomIn').addEventListener('click', () => changeVsZoom(1));
-    document.getElementById('vsZoomOut').addEventListener('click', () => changeVsZoom(-1));
+    const btnZoomOut = document.getElementById('vsZoomOut');
+    btnZoomOut.addEventListener('click', () => changeVsZoom(-1));
+    btnZoomOut.addEventListener('dblclick', () => resetVsZoom());
+    updateVsZoomButtons();
 
     const btnOverlay = document.getElementById('vsOverlayToggle');
     btnOverlay.style.opacity = _vsShowOverlay ? '1' : '0.35';
