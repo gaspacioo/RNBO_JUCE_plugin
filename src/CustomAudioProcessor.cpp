@@ -159,7 +159,7 @@ void CustomAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     // Riparti puliti e fai ripartire il thread spettro a priorità alta, così consuma
     // i frame prontamente (meno latenza) senza però competere col thread audio realtime.
     _specFrameFifo.reset();
-    _specThread.startThread (juce::Thread::Priority::high);
+    _specThread.startThread (::juce::Thread::Priority::high);
 }
 
 //==============================================================================
