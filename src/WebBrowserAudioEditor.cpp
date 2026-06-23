@@ -95,10 +95,14 @@ WebBrowserAudioEditor::WebBrowserAudioEditor (CustomAudioProcessor* const p,
     {
         _gainAttachment = std::make_unique<WebSliderParameterAttachment> (
             findParameter (p, "gain"), _gainRelay, nullptr);
-        _tempAttachment = std::make_unique<WebSliderParameterAttachment> (
-            findParameter (p, "temperature"), _tempRelay, nullptr);
-        _distAttachment = std::make_unique<WebSliderParameterAttachment> (
-            findParameter (p, "distance"), _distRelay, nullptr);
+        _lTempAttachment = std::make_unique<WebSliderParameterAttachment> (
+            findParameter (p, "l_temperature"), _lTempRelay, nullptr);
+        _lDistAttachment = std::make_unique<WebSliderParameterAttachment> (
+            findParameter (p, "l_distance"), _lDistRelay, nullptr);
+        _rTempAttachment = std::make_unique<WebSliderParameterAttachment> (
+            findParameter (p, "r_temperature"), _rTempRelay, nullptr);
+        _rDistAttachment = std::make_unique<WebSliderParameterAttachment> (
+            findParameter (p, "r_distance"), _rDistRelay, nullptr);
 
         _phaseInvAttachment = std::make_unique<WebToggleButtonParameterAttachment> (
             findParameter (p, "phase_inv"), _phaseInvRelay, nullptr);
@@ -178,7 +182,8 @@ void WebBrowserAudioEditor::sendMeterLevelsToWebView()
     payload->setProperty ("inPeakR",   levels.inPeakR.load (std::memory_order_relaxed));
     payload->setProperty ("outPeakL",  levels.outPeakL.load (std::memory_order_relaxed));
     payload->setProperty ("outPeakR",  levels.outPeakR.load (std::memory_order_relaxed));
-    payload->setProperty ("delayTime", levels.delayTime.load (std::memory_order_relaxed));
+    payload->setProperty ("lDelayTime", levels.lDelayTime.load (std::memory_order_relaxed));
+    payload->setProperty ("rDelayTime", levels.rDelayTime.load (std::memory_order_relaxed));
     payload->setProperty ("lufsM", levels.lufsMomentary.load  (std::memory_order_relaxed));
     payload->setProperty ("lufsS", levels.lufsShortTerm.load  (std::memory_order_relaxed));
     payload->setProperty ("lufsI", levels.lufsIntegrated.load (std::memory_order_relaxed));

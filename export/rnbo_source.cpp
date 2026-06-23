@@ -549,9 +549,11 @@ void getPreset(PatcherStateInterface& preset) {
     this->param_07_getPresetValue(getSubState(preset, "r_mute"));
     this->param_08_getPresetValue(getSubState(preset, "side_gain"));
     this->param_09_getPresetValue(getSubState(preset, "phase_inv"));
-    this->param_10_getPresetValue(getSubState(preset, "distance"));
+    this->param_10_getPresetValue(getSubState(preset, "l_distance"));
     this->param_11_getPresetValue(getSubState(preset, "side_mute"));
-    this->param_12_getPresetValue(getSubState(preset, "temperature"));
+    this->param_12_getPresetValue(getSubState(preset, "l_temperature"));
+    this->param_13_getPresetValue(getSubState(preset, "r_distance"));
+    this->param_14_getPresetValue(getSubState(preset, "r_temperature"));
 }
 
 void setPreset(MillisecondTime time, PatcherStateInterface& preset) {
@@ -565,9 +567,11 @@ void setPreset(MillisecondTime time, PatcherStateInterface& preset) {
     this->param_07_setPresetValue(getSubState(preset, "r_mute"));
     this->param_08_setPresetValue(getSubState(preset, "side_gain"));
     this->param_09_setPresetValue(getSubState(preset, "phase_inv"));
-    this->param_10_setPresetValue(getSubState(preset, "distance"));
+    this->param_10_setPresetValue(getSubState(preset, "l_distance"));
     this->param_11_setPresetValue(getSubState(preset, "side_mute"));
-    this->param_12_setPresetValue(getSubState(preset, "temperature"));
+    this->param_12_setPresetValue(getSubState(preset, "l_temperature"));
+    this->param_13_setPresetValue(getSubState(preset, "r_distance"));
+    this->param_14_setPresetValue(getSubState(preset, "r_temperature"));
 }
 
 void setParameterValue(ParameterIndex index, ParameterValue v, MillisecondTime time) {
@@ -632,6 +636,16 @@ void setParameterValue(ParameterIndex index, ParameterValue v, MillisecondTime t
     case 11:
         {
         this->param_12_value_set(v);
+        break;
+        }
+    case 12:
+        {
+        this->param_13_value_set(v);
+        break;
+        }
+    case 13:
+        {
+        this->param_14_value_set(v);
         break;
         }
     }
@@ -699,6 +713,14 @@ ParameterValue getParameterValue(ParameterIndex index)  {
         {
         return this->param_12_value;
         }
+    case 12:
+        {
+        return this->param_13_value;
+        }
+    case 13:
+        {
+        return this->param_14_value;
+        }
     default:
         {
         return 0;
@@ -715,7 +737,7 @@ ParameterIndex getNumSignalOutParameters() const {
 }
 
 ParameterIndex getNumParameters() const {
-    return 12;
+    return 14;
 }
 
 ConstCharPointer getParameterName(ParameterIndex index) const {
@@ -758,7 +780,7 @@ ConstCharPointer getParameterName(ParameterIndex index) const {
         }
     case 9:
         {
-        return "distance";
+        return "l_distance";
         }
     case 10:
         {
@@ -766,7 +788,15 @@ ConstCharPointer getParameterName(ParameterIndex index) const {
         }
     case 11:
         {
-        return "temperature";
+        return "l_temperature";
+        }
+    case 12:
+        {
+        return "r_distance";
+        }
+    case 13:
+        {
+        return "r_temperature";
         }
     default:
         {
@@ -815,7 +845,7 @@ ConstCharPointer getParameterId(ParameterIndex index) const {
         }
     case 9:
         {
-        return "distance";
+        return "l_distance";
         }
     case 10:
         {
@@ -823,7 +853,15 @@ ConstCharPointer getParameterId(ParameterIndex index) const {
         }
     case 11:
         {
-        return "temperature";
+        return "l_temperature";
+        }
+    case 12:
+        {
+        return "r_distance";
+        }
+    case 13:
+        {
+        return "r_temperature";
         }
     default:
         {
@@ -1073,6 +1111,44 @@ void getParameterInfo(ParameterIndex index, ParameterInfo * info) const {
             info->signalIndex = INVALID_INDEX;
             break;
             }
+        case 12:
+            {
+            info->type = ParameterTypeNumber;
+            info->initialValue = 0;
+            info->min = 0;
+            info->max = 60;
+            info->exponent = 1;
+            info->steps = 0;
+            info->debug = false;
+            info->saveable = true;
+            info->transmittable = true;
+            info->initialized = true;
+            info->visible = true;
+            info->displayName = "";
+            info->unit = "";
+            info->ioType = IOTypeUndefined;
+            info->signalIndex = INVALID_INDEX;
+            break;
+            }
+        case 13:
+            {
+            info->type = ParameterTypeNumber;
+            info->initialValue = 20;
+            info->min = -10;
+            info->max = 40;
+            info->exponent = 1;
+            info->steps = 0;
+            info->debug = false;
+            info->saveable = true;
+            info->transmittable = true;
+            info->initialized = true;
+            info->visible = true;
+            info->displayName = "";
+            info->unit = "";
+            info->ioType = IOTypeUndefined;
+            info->signalIndex = INVALID_INDEX;
+            break;
+            }
         }
     }
 }
@@ -1115,6 +1191,7 @@ ParameterValue convertToNormalizedParameterValue(ParameterIndex index, Parameter
         }
         }
     case 9:
+    case 12:
         {
         {
             value = (value < 0 ? 0 : (value > 60 ? 60 : value));
@@ -1135,6 +1212,7 @@ ParameterValue convertToNormalizedParameterValue(ParameterIndex index, Parameter
         }
         }
     case 11:
+    case 13:
         {
         {
             value = (value < -10 ? -10 : (value > 40 ? 40 : value));
@@ -1170,6 +1248,7 @@ ParameterValue convertFromNormalizedParameterValue(ParameterIndex index, Paramet
         }
         }
     case 9:
+    case 12:
         {
         {
             {
@@ -1190,6 +1269,7 @@ ParameterValue convertFromNormalizedParameterValue(ParameterIndex index, Paramet
         }
         }
     case 11:
+    case 13:
         {
         {
             {
@@ -1253,6 +1333,14 @@ ParameterValue constrainParameterValue(ParameterIndex index, ParameterValue valu
     case 11:
         {
         return this->param_12_value_constrain(value);
+        }
+    case 12:
+        {
+        return this->param_13_value_constrain(value);
+        }
+    case 13:
+        {
+        return this->param_14_value_constrain(value);
         }
     default:
         {
@@ -1382,9 +1470,13 @@ MessageTagInfo resolveTag(MessageTag tag) const {
         {
         return "correlation_value";
         }
-    case TAG("delay_time"):
+    case TAG("l_delay_time"):
         {
-        return "delay_time";
+        return "l_delay_time";
+        }
+    case TAG("r_delay_time"):
+        {
+        return "r_delay_time";
         }
     }
 
@@ -1392,7 +1484,7 @@ MessageTagInfo resolveTag(MessageTag tag) const {
 }
 
 MessageIndex getNumMessages() const {
-    return 6;
+    return 7;
 }
 
 const MessageInfo& getMessageInfo(MessageIndex index) const {
@@ -1445,11 +1537,20 @@ const MessageInfo& getMessageInfo(MessageIndex index) const {
     case 5:
         {
         static const MessageInfo r5 = {
-            "delay_time",
+            "l_delay_time",
             Outport
         };
 
         return r5;
+        }
+    case 6:
+        {
+        static const MessageInfo r6 = {
+            "r_delay_time",
+            Outport
+        };
+
+        return r6;
         }
     }
 
@@ -1613,6 +1714,33 @@ void param_12_value_set(number v) {
     }
 
     this->trigger_05_input_number_set(v);
+}
+
+void param_13_value_set(number v) {
+    v = this->param_13_value_constrain(v);
+    this->param_13_value = v;
+    this->sendParameter(12, false);
+
+    if (this->param_13_value != this->param_13_lastValue) {
+        this->getEngine()->presetTouched();
+        this->param_13_lastValue = this->param_13_value;
+    }
+
+    this->expr_22_$in1_set(v);
+    this->expr_21_$in1_set(v);
+}
+
+void param_14_value_set(number v) {
+    v = this->param_14_value_constrain(v);
+    this->param_14_value = v;
+    this->sendParameter(13, false);
+
+    if (this->param_14_value != this->param_14_lastValue) {
+        this->getEngine()->presetTouched();
+        this->param_14_lastValue = this->param_14_value;
+    }
+
+    this->trigger_06_input_number_set(v);
 }
 
 void snapshot_01_out_set(number v) {
@@ -1836,6 +1964,14 @@ void startup() {
 
     {
         this->scheduleParamInit(11, 0);
+    }
+
+    {
+        this->scheduleParamInit(12, 0);
+    }
+
+    {
+        this->scheduleParamInit(13, 0);
     }
 
     this->processParamInitEvents();
@@ -2560,11 +2696,7 @@ number param_10_value_constrain(number v) const {
 }
 
 void outport_06_input_number_set(number v) {
-    this->getEngine()->sendNumMessage(TAG("delay_time"), TAG(""), v, this->_currentTime);
-}
-
-void delaytilde_02_delay_set(number v) {
-    this->delaytilde_02_delay = v;
+    this->getEngine()->sendNumMessage(TAG("l_delay_time"), TAG(""), v, this->_currentTime);
 }
 
 void delaytilde_01_delay_set(number v) {
@@ -2572,7 +2704,6 @@ void delaytilde_01_delay_set(number v) {
 }
 
 void mstosamps_01_out1_set(number v) {
-    this->delaytilde_02_delay_set(v);
     this->delaytilde_01_delay_set(v);
 }
 
@@ -2599,17 +2730,12 @@ void expr_19_$in1_set(number $in1) {
     );//#map:expr_obj-24:1
 }
 
-void selector_02_onoff_set(number v) {
-    this->selector_02_onoff = v;
-}
-
 void selector_01_onoff_set(number v) {
     this->selector_01_onoff = v;
 }
 
 void expr_18_out1_set(number v) {
     this->expr_18_out1 = v;
-    this->selector_02_onoff_set(this->expr_18_out1);
     this->selector_01_onoff_set(this->expr_18_out1);
 }
 
@@ -2703,6 +2829,95 @@ void trigger_05_out1_bang() {
 void trigger_05_input_number_set(number v) {
     this->trigger_05_out2_set(v);
     this->trigger_05_out1_bang();
+}
+
+number param_13_value_constrain(number v) const {
+    v = (v > 60 ? 60 : (v < 0 ? 0 : v));
+    return v;
+}
+
+void outport_07_input_number_set(number v) {
+    this->getEngine()->sendNumMessage(TAG("r_delay_time"), TAG(""), v, this->_currentTime);
+}
+
+void delaytilde_02_delay_set(number v) {
+    this->delaytilde_02_delay = v;
+}
+
+void mstosamps_02_out1_set(number v) {
+    this->delaytilde_02_delay_set(v);
+}
+
+void mstosamps_02_ms_set(number ms) {
+    this->mstosamps_02_ms = ms;
+
+    {
+        this->mstosamps_02_out1_set(ms * this->sr * 0.001);
+        return;
+    }
+}
+
+void expr_22_out1_set(number v) {
+    this->expr_22_out1 = v;
+    this->outport_07_input_number_set(this->expr_22_out1);
+    this->mstosamps_02_ms_set(this->expr_22_out1);
+}
+
+void expr_22_$in1_set(number $in1) {
+    this->expr_22_$in1 = $in1;
+
+    this->expr_22_out1_set(
+        ((331.4 + 0.6 * this->expr_22_$in2 == 0. ? 0. : this->expr_22_$in1 / (331.4 + 0.6 * this->expr_22_$in2))) * 1000
+    );//#map:expr_obj-100:1
+}
+
+void selector_02_onoff_set(number v) {
+    this->selector_02_onoff = v;
+}
+
+void expr_21_out1_set(number v) {
+    this->expr_21_out1 = v;
+    this->selector_02_onoff_set(this->expr_21_out1);
+}
+
+void expr_21_$in1_set(number $in1) {
+    this->expr_21_$in1 = $in1;
+    this->expr_21_out1_set((this->expr_21_$in1 > 0) + 1);//#map:expr_obj-99:1
+}
+
+number param_14_value_constrain(number v) const {
+    v = (v > 40 ? 40 : (v < -10 ? -10 : v));
+    return v;
+}
+
+void expr_22_$in2_set(number v) {
+    this->expr_22_$in2 = v;
+}
+
+void trigger_06_out2_set(number v) {
+    this->expr_22_$in2_set(v);
+}
+
+void param_13_value_bang() {
+    number v = this->param_13_value;
+    this->sendParameter(12, false);
+
+    if (this->param_13_value != this->param_13_lastValue) {
+        this->getEngine()->presetTouched();
+        this->param_13_lastValue = this->param_13_value;
+    }
+
+    this->expr_22_$in1_set(v);
+    this->expr_21_$in1_set(v);
+}
+
+void trigger_06_out1_bang() {
+    this->param_13_value_bang();
+}
+
+void trigger_06_input_number_set(number v) {
+    this->trigger_06_out2_set(v);
+    this->trigger_06_out1_bang();
 }
 
 void outport_01_input_number_set(number v) {
@@ -4513,6 +4728,28 @@ void param_12_setPresetValue(PatcherStateInterface& preset) {
     this->param_12_value_set(preset["value"]);
 }
 
+void param_13_getPresetValue(PatcherStateInterface& preset) {
+    preset["value"] = this->param_13_value;
+}
+
+void param_13_setPresetValue(PatcherStateInterface& preset) {
+    if ((bool)(stateIsEmpty(preset)))
+        return;
+
+    this->param_13_value_set(preset["value"]);
+}
+
+void param_14_getPresetValue(PatcherStateInterface& preset) {
+    preset["value"] = this->param_14_value;
+}
+
+void param_14_setPresetValue(PatcherStateInterface& preset) {
+    if ((bool)(stateIsEmpty(preset)))
+        return;
+
+    this->param_14_value_set(preset["value"]);
+}
+
 void globaltransport_advance() {}
 
 void globaltransport_dspsetup(bool ) {}
@@ -4685,6 +4922,14 @@ void assign_defaults()
     dspexpr_20_in1 = 0;
     dspexpr_20_in2 = 0;
     param_12_value = 20;
+    expr_21_$in1 = 0;
+    expr_21_out1 = 0;
+    param_13_value = 0;
+    mstosamps_02_ms = 0;
+    expr_22_$in1 = 0;
+    expr_22_$in2 = 0;
+    expr_22_out1 = 0;
+    param_14_value = 20;
     _currentTime = 0;
     audioProcessSampleCount = 0;
     sampleOffsetIntoNextAudioBuffer = 0;
@@ -4803,6 +5048,8 @@ void assign_defaults()
     snapshot_05_lastValue = 0;
     slide_tilde_02_prev = 0;
     param_12_lastValue = 0;
+    param_13_lastValue = 0;
+    param_14_lastValue = 0;
     globaltransport_tempo = nullptr;
     globaltransport_state = nullptr;
     stackprotect_count = 0;
@@ -4962,6 +5209,14 @@ void assign_defaults()
     number dspexpr_20_in1;
     number dspexpr_20_in2;
     number param_12_value;
+    number expr_21_$in1;
+    number expr_21_out1;
+    number param_13_value;
+    number mstosamps_02_ms;
+    number expr_22_$in1;
+    number expr_22_$in2;
+    number expr_22_out1;
+    number param_14_value;
     MillisecondTime _currentTime;
     UInt64 audioProcessSampleCount;
     SampleIndex sampleOffsetIntoNextAudioBuffer;
@@ -5087,6 +5342,8 @@ void assign_defaults()
     number snapshot_05_lastValue;
     number slide_tilde_02_prev;
     number param_12_lastValue;
+    number param_13_lastValue;
+    number param_14_lastValue;
     signal globaltransport_tempo;
     signal globaltransport_state;
     number stackprotect_count;

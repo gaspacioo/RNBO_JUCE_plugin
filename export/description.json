@@ -195,8 +195,8 @@
     {
       "type": "ParameterTypeNumber",
       "index": 9,
-      "name": "distance",
-      "paramId": "distance",
+      "name": "l_distance",
+      "paramId": "l_distance",
       "minimum": 0,
       "maximum": 60,
       "exponent": 1,
@@ -238,8 +238,48 @@
     {
       "type": "ParameterTypeNumber",
       "index": 11,
-      "name": "temperature",
-      "paramId": "temperature",
+      "name": "l_temperature",
+      "paramId": "l_temperature",
+      "minimum": -10,
+      "maximum": 40,
+      "exponent": 1,
+      "steps": 0,
+      "initialValue": 20,
+      "isEnum": false,
+      "enumValues": [],
+      "displayName": "",
+      "unit": "",
+      "order": 0,
+      "debug": false,
+      "visible": true,
+      "signalIndex": null,
+      "ioType": "IOTypeUndefined"
+    },
+    {
+      "type": "ParameterTypeNumber",
+      "index": 12,
+      "name": "r_distance",
+      "paramId": "r_distance",
+      "minimum": 0,
+      "maximum": 60,
+      "exponent": 1,
+      "steps": 0,
+      "initialValue": 0,
+      "isEnum": false,
+      "enumValues": [],
+      "displayName": "",
+      "unit": "",
+      "order": 0,
+      "debug": false,
+      "visible": true,
+      "signalIndex": null,
+      "ioType": "IOTypeUndefined"
+    },
+    {
+      "type": "ParameterTypeNumber",
+      "index": 13,
+      "name": "r_temperature",
+      "paramId": "r_temperature",
       "minimum": -10,
       "maximum": 40,
       "exponent": 1,
@@ -256,7 +296,7 @@
       "ioType": "IOTypeUndefined"
     }
   ],
-  "numParameters": 12,
+  "numParameters": 14,
   "numSignalInParameters": 0,
   "numSignalOutParameters": 0,
   "numInputChannels": 2,
@@ -289,7 +329,11 @@
       "meta": ""
     },
     {
-      "tag": "delay_time",
+      "tag": "l_delay_time",
+      "meta": ""
+    },
+    {
+      "tag": "r_delay_time",
       "meta": ""
     }
   ],

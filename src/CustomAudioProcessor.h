@@ -38,7 +38,8 @@ public:
         std::atomic<float> outPeakL { -100.f };
         std::atomic<float> outPeakR { -100.f };
 
-        std::atomic<float> delayTime { 0.f };
+        std::atomic<float> lDelayTime { 0.f };
+        std::atomic<float> rDelayTime { 0.f };
 
         std::atomic<float> correlationValue { 0.f };
 
@@ -233,7 +234,8 @@ private:
     static constexpr RNBO::MessageTag tagOutRmsL = RNBO::TAG ("out_rms_L");
     static constexpr RNBO::MessageTag tagOutRmsR = RNBO::TAG ("out_rms_R");
 
-    static constexpr RNBO::MessageTag tagDelayTime = RNBO::TAG ("delay_time");
+    static constexpr RNBO::MessageTag tagLDelayTime = RNBO::TAG ("l_delay_time");
+    static constexpr RNBO::MessageTag tagRDelayTime = RNBO::TAG ("r_delay_time");
 
     static constexpr RNBO::MessageTag tagCorrelationValue = RNBO::TAG ("correlation_value");
 

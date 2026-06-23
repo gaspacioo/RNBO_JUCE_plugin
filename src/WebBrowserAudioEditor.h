@@ -30,9 +30,11 @@ private:
 
     int _specSendTick = 0;   // invia lo spettro ogni 4 tick del timer (~15 Hz)
 
-    WebSliderRelay _gainRelay { "gain" };
-    WebSliderRelay _tempRelay { "temperature" };
-    WebSliderRelay _distRelay { "distance" };
+    WebSliderRelay _gainRelay    { "gain" };
+    WebSliderRelay _lTempRelay   { "l_temperature" };
+    WebSliderRelay _lDistRelay   { "l_distance" };
+    WebSliderRelay _rTempRelay   { "r_temperature" };
+    WebSliderRelay _rDistRelay   { "r_distance" };
     WebToggleButtonRelay _phaseInvRelay { "phase_inv" };
     WebSliderRelay _midGainRelay { "mid_gain" };
     WebSliderRelay _sideGainRelay { "side_gain" };
@@ -84,8 +86,10 @@ private:
                 completion (juce::var());
             })
             .withOptionsFrom (_gainRelay)
-            .withOptionsFrom (_tempRelay)
-            .withOptionsFrom (_distRelay)
+            .withOptionsFrom (_lTempRelay)
+            .withOptionsFrom (_lDistRelay)
+            .withOptionsFrom (_rTempRelay)
+            .withOptionsFrom (_rDistRelay)
             .withOptionsFrom (_phaseInvRelay)
             .withOptionsFrom (_midGainRelay)
             .withOptionsFrom (_sideGainRelay)
@@ -100,8 +104,10 @@ private:
     };
 
     std::unique_ptr<WebSliderParameterAttachment> _gainAttachment;
-    std::unique_ptr<WebSliderParameterAttachment> _tempAttachment;
-    std::unique_ptr<WebSliderParameterAttachment> _distAttachment;
+    std::unique_ptr<WebSliderParameterAttachment> _lTempAttachment;
+    std::unique_ptr<WebSliderParameterAttachment> _lDistAttachment;
+    std::unique_ptr<WebSliderParameterAttachment> _rTempAttachment;
+    std::unique_ptr<WebSliderParameterAttachment> _rDistAttachment;
     std::unique_ptr<WebToggleButtonParameterAttachment> _phaseInvAttachment;
     std::unique_ptr<WebSliderParameterAttachment> _midGainAttachment;
     std::unique_ptr<WebSliderParameterAttachment> _sideGainAttachment;

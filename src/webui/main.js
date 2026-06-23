@@ -751,7 +751,7 @@ function drawVectorscope() {
 }
 
 function drawVectorscopeOverlay(ctx, w, h, cx, cy) {
-    const r = Math.min(cx, cy) - 1;   // semidiagonale del rombo (ampiezza unitaria)
+    const r = (Math.min(cx, cy) - 1) * _vsZoom;   // segue lo zoom: ampiezza unitaria in coordinate canvas
 
     ctx.save();
     ctx.shadowBlur = 0;
@@ -854,18 +854,28 @@ const SPEC_BAND_STEPS = [96, 192, 256];
 let _specBands = 96;         // conteggio attivo, seguito dal valore confermato dal C++
 const SPEC_DB_RANGES = [-60, -90, -120];  // range ciclabili dal toggle dB
 const SPEC_DB_MAX  = 0;
-const SPEC_ATTACK  = 0.70;  // lerp per frame verso il target in salita (più reattivo)
-const SPEC_RELEASE = 0.35;  // discesa più rapida: meno latenza percepita sui transienti
+// Coefficienti EMA del canvas (applicati a 60 fps).
+// Attacco deliberatamente lento: un segnale che compare di colpo (es. panning
+// da 100% a 99%) deve salire gradualmente sullo schermo invece di saltare.
+// La risposta è già parzialmente ammorbidita dal C++; qui si aggiunge un ulteriore
+// livello di smussamento visivo per le barre che escono dal floor.
+const SPEC_ATTACK  = 0.50;
+const SPEC_RELEASE = 0.28;
 const SPEC_F_MIN   = 20;
 const SPEC_F_MAX   = 20000;
 
-const SPEC_PEAK_DECAY = 0.1;        // dB per frame durante il decadimento (~6 dB/s a 60 fps)
-const SPEC_PEAK_HOLD_FRAMES = 120;  // frame di hold prima del decadimento (~2s a 60 fps)
+// Variabili mutabili dal pannello floating (default = comportamento originale).
+// Slider "Vel. Peak" 1-10 → hold: 300–30 frame (5s–0.5s), decay: 0.02–0.29 dB/frame
+let _specPeakDecayRate  = 0.10;   // dB per frame durante il decadimento
+let _specPeakHoldFrames = 120;    // frame di hold prima del decadimento
 const SPEC_TILT_DB_OCT = 3;    // pendenza pinking: rumore rosa appare piatto
 const SPEC_TILT_PIVOT  = 1000; // Hz — frequenza a guadagno zero del tilt
 // Sotto questa soglia la banda è considerata silenzio assoluto: nessuna barra
 // né peak tick, anche se il tilt porterebbe il valore dentro il range visibile
 const SPEC_FLOOR_DB    = -96;
+// Frazione del range dB in cui le barre appaiono con fade quadratico invece di
+// saltar fuori di scatto (es. 0.05 = il 5% inferiore del range visualizzato).
+const SPEC_FLOOR_FADE  = 0.05;
 
 let _specDbMin   = -90;   // minimo del range visualizzato, ciclato dal toggle dB
 
@@ -1087,6 +1097,16 @@ function drawSpectrum() {
     const norm = (db, tilt) => db <= SPEC_FLOOR_DB ? 0
         : Math.min(1, Math.max(0, (db + tilt - _specDbMin) / dbRange));
 
+    // Fade quadratico nella zona inferiore del range (SPEC_FLOOR_FADE = 5% del range):
+    // le barre che emergono dal floor salgono dolcemente invece di comparire di scatto.
+    // Sopra la zona di fade la funzione è identità (nessun effetto sulla parte alta).
+    const fade = (t) => {
+        if (t <= 0) return 0;
+        if (t >= SPEC_FLOOR_FADE) return t;
+        const r = t / SPEC_FLOOR_FADE;
+        return r * r * SPEC_FLOOR_FADE;
+    };
+
     for (let b = 0; b < _specBands; b++) {
         // Smoothing temporale di tutte e 4 le serie (L/R servono anche all'overlay IQ)
         _specDrawL[b]    += (_specTargetL[b]    - _specDrawL[b])    * (_specTargetL[b]    > _specDrawL[b]    ? SPEC_ATTACK : SPEC_RELEASE);
@@ -1105,16 +1125,16 @@ function drawSpectrum() {
 
         if (!_specMsMode) {
             // ---- Vista L/R: L a sinistra, R a destra ----
-            const tL = norm(_specDrawL[b], tilt);
-            const tR = norm(_specDrawR[b], tilt);
+            const tL = fade(norm(_specDrawL[b], tilt));
+            const tR = fade(norm(_specDrawR[b], tilt));
             if (tL > 0.003) { ctx.fillStyle = bandColor; ctx.fillRect(midX - gap - Math.max(1, tL * halfW), y, Math.max(1, tL * halfW), rh); }
             if (tR > 0.003) { ctx.fillStyle = bandColor; ctx.fillRect(midX + gap, y, Math.max(1, tR * halfW), rh); }
 
             if (_specPeakHold) {
                 if (_specDrawL[b] >= _specPeakL[b]) { _specPeakL[b] = _specDrawL[b]; _specPeakAgeL[b] = 0; }
-                else { _specPeakAgeL[b]++; if (_specPeakAgeL[b] > SPEC_PEAK_HOLD_FRAMES) _specPeakL[b] = Math.max(_specPeakL[b] - SPEC_PEAK_DECAY, SPEC_FLOOR_DB - 1); }
+                else { _specPeakAgeL[b]++; if (_specPeakAgeL[b] > _specPeakHoldFrames) _specPeakL[b] = Math.max(_specPeakL[b] - _specPeakDecayRate, SPEC_FLOOR_DB - 1); }
                 if (_specDrawR[b] >= _specPeakR[b]) { _specPeakR[b] = _specDrawR[b]; _specPeakAgeR[b] = 0; }
-                else { _specPeakAgeR[b]++; if (_specPeakAgeR[b] > SPEC_PEAK_HOLD_FRAMES) _specPeakR[b] = Math.max(_specPeakR[b] - SPEC_PEAK_DECAY, SPEC_FLOOR_DB - 1); }
+                else { _specPeakAgeR[b]++; if (_specPeakAgeR[b] > _specPeakHoldFrames) _specPeakR[b] = Math.max(_specPeakR[b] - _specPeakDecayRate, SPEC_FLOOR_DB - 1); }
 
                 const pL = norm(_specPeakL[b], tilt);
                 const pR = norm(_specPeakR[b], tilt);
@@ -1124,8 +1144,8 @@ function drawSpectrum() {
             }
         } else {
             // ---- Vista M/S: Mid riempito simmetrico + Side come linea sui due lati ----
-            const tMid  = norm(_specDrawMid[b],  tilt);
-            const tSide = norm(_specDrawSide[b], tilt);
+            const tMid  = fade(norm(_specDrawMid[b],  tilt));
+            const tSide = fade(norm(_specDrawSide[b], tilt));
 
             // Mid: area piena arcobaleno, specchiata su entrambi i lati del centro
             if (tMid > 0.003) {
@@ -1141,7 +1161,7 @@ function drawSpectrum() {
             // Peak hold sul Mid (tick tenue, simmetrico)
             if (_specPeakHold) {
                 if (_specDrawMid[b] >= _specPeakMid[b]) { _specPeakMid[b] = _specDrawMid[b]; _specPeakAgeMid[b] = 0; }
-                else { _specPeakAgeMid[b]++; if (_specPeakAgeMid[b] > SPEC_PEAK_HOLD_FRAMES) _specPeakMid[b] = Math.max(_specPeakMid[b] - SPEC_PEAK_DECAY, SPEC_FLOOR_DB - 1); }
+                else { _specPeakAgeMid[b]++; if (_specPeakAgeMid[b] > _specPeakHoldFrames) _specPeakMid[b] = Math.max(_specPeakMid[b] - _specPeakDecayRate, SPEC_FLOOR_DB - 1); }
 
                 const pM = norm(_specPeakMid[b], tilt);
                 if (pM > 0.01) {
@@ -1180,7 +1200,8 @@ function drawSpectrum() {
 // Overlay "IQ": per ogni banda mostra dove si concentra l'energia nel panorama
 // stereo. Posizione = bilanciamento RMS L/R della banda; soglia per nascondere
 // le bande sotto il floor di visualizzazione.
-const SPEC_IQ_SMOOTH = 0.30;   // smoothing temporale per banda
+// Slider "Vel. P" 1-10 → _specIqSmooth = (v-1)/9 * 0.99 + 0.01  (range 0.01–1.00)
+let _specIqSmooth = 0.30;  // smoothing temporale per banda (mutable: speed panel)
 const SPEC_IQ_SCALE  = 0.33;   // lunghezza max della barra come frazione di halfW
 const SPEC_IQ_FREQ_R = 2;      // raggio finestra smoothing in frequenza (±bande)
 function drawSpecIq(ctx, midX, halfW, h, rowH) {
@@ -1204,7 +1225,7 @@ function drawSpecIq(ctx, midX, halfW, h, rowH) {
             const sum = pA + pB;
             target = sum > 1e-20 ? (pA - pB) / sum : 0;
         }
-        _specBal[b] += (target - _specBal[b]) * SPEC_IQ_SMOOTH;
+        _specBal[b] += (target - _specBal[b]) * _specIqSmooth;
     }
 
     // Fase 2: smoothing in frequenza (media triangolare su ±SPEC_IQ_FREQ_R bande)
@@ -1232,9 +1253,9 @@ function drawSpecIq(ctx, midX, halfW, h, rowH) {
         const y = h - (b + 1) * rowH;
         if (ms) {
             const [r, g, bl] = _segCorrColor(val);
-            ctx.fillStyle = `rgba(${r},${g},${bl},0.92)`;
+            ctx.fillStyle = `rgba(${r},${g},${bl},0.72)`;
         } else {
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
         }
         if (len >= 0) ctx.fillRect(midX, y, len, rh);
         else          ctx.fillRect(midX + len, y, -len, rh);
@@ -1458,6 +1479,84 @@ function setupSpectrumControls() {
         };
     });
     canvas.addEventListener('mouseleave', () => { _specMouse = null; });
+
+    // Doppio click sul canvas → apre/chiude il pannello velocità
+    onManualDblClick(canvas, (e) => {
+        const panel = document.getElementById('specSpeedPanel');
+        if (!panel) return;
+        if (panel.style.display === 'none' || panel.style.display === '') {
+            // Posiziona il pannello vicino al click, restando dentro la finestra
+            const x = Math.min(e.clientX + 10, window.innerWidth  - 200);
+            const y = Math.min(e.clientY + 10, window.innerHeight - 120);
+            panel.style.left = x + 'px';
+            panel.style.top  = y + 'px';
+            panel.style.display = 'block';
+        } else {
+            panel.style.display = 'none';
+        }
+    });
+}
+
+function setupSpectrumSpeedPanel() {
+    const panel    = document.getElementById('specSpeedPanel');
+    const header   = document.getElementById('specSpeedPanelHeader');
+    const closeBtn = document.getElementById('specSpeedClose');
+    const iqSlider   = document.getElementById('specIqSpeedSlider');
+    const iqVal      = document.getElementById('specIqSpeedValue');
+    const peakSlider = document.getElementById('specPeakSpeedSlider');
+    const peakVal    = document.getElementById('specPeakSpeedValue');
+    if (!panel || !iqSlider || !peakSlider) return;
+
+    const saved = loadUiState();
+
+    // Ripristino valori salvati
+    // Chiavi rinominate (le precedenti erano interi 1-10; ora si salva il valore reale).
+    const iqInitVal   = (typeof saved.specIqSmooth   === 'number' && saved.specIqSmooth   >= 0.01 && saved.specIqSmooth   <= 1)   ? saved.specIqSmooth   : 0.30;
+    const peakInitVal = (typeof saved.specPeakHoldS  === 'number' && saved.specPeakHoldS  >= 0.5  && saved.specPeakHoldS  <= 5)   ? saved.specPeakHoldS  : 2.0;
+
+    const applyIqSpeed = (v) => {
+        // v è direttamente il coefficiente EMA: range [0.01, 1.00]
+        _specIqSmooth = v;
+        iqVal.textContent = v.toFixed(2);
+        saveUiState({ specIqSmooth: v });
+    };
+    const applyPeakSpeed = (secs) => {
+        // secs è il hold in secondi: range [0.5, 5.0]
+        _specPeakHoldFrames = Math.round(secs * 60);
+        // decay fisso a 0.1 dB/frame: il "peak speed" si percepisce principalmente sull'hold
+        _specPeakDecayRate  = 0.10;
+        peakVal.textContent = secs.toFixed(1) + 's';
+        saveUiState({ specPeakHoldS: secs });
+    };
+
+    iqSlider.value   = iqInitVal;
+    peakSlider.value = peakInitVal;
+    applyIqSpeed(iqInitVal);
+    applyPeakSpeed(peakInitVal);
+
+    iqSlider.addEventListener('input',   () => applyIqSpeed(parseFloat(iqSlider.value)));
+    peakSlider.addEventListener('input', () => applyPeakSpeed(parseFloat(peakSlider.value)));
+
+    closeBtn.addEventListener('click', () => { panel.style.display = 'none'; });
+
+    // Drag
+    let _dragOffX = 0, _dragOffY = 0, _dragging = false;
+    header.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        _dragging = true;
+        const r = panel.getBoundingClientRect();
+        _dragOffX = e.clientX - r.left;
+        _dragOffY = e.clientY - r.top;
+        header.setPointerCapture(e.pointerId);
+    });
+    header.addEventListener('pointermove', (e) => {
+        if (!_dragging) return;
+        panel.style.left = Math.max(0, e.clientX - _dragOffX) + 'px';
+        panel.style.top  = Math.max(0, e.clientY - _dragOffY) + 'px';
+    });
+    header.addEventListener('pointerup',     () => { _dragging = false; });
+    header.addEventListener('pointercancel', () => { _dragging = false; });
 }
 
 // ===== CORE LOGIC: SLIDER E PARAMETRI =====
@@ -1826,39 +1925,60 @@ function wireNumericParameter({ paramId, inputId, fallbackRange, step, defaultVa
     };
 }
 
-// Stato condiviso per la modifica manuale del delay (campo "Delay")
-let _phaseTempVal   = TEMP_DEFAULT;
+// Temperatura corrente per canale (usata nella conversione delay↔distanza)
+let _phaseLTempVal  = TEMP_DEFAULT;
+let _phaseRTempVal  = TEMP_DEFAULT;
 let _phaseSampleRate = 0;
 
 function wirePhaseControls() {
+    // ── Canale L ──────────────────────────────────────────────────────────────
     wireNumericParameter({
-        paramId: 'temperature',
-        inputId: 'temperatureInput',
+        paramId: 'l_temperature',
+        inputId: 'lTemperatureInput',
         fallbackRange: TEMP_RANGE,
         step: TEMP_STEP,
         defaultValue: TEMP_DEFAULT,
-        onValueChange: (v) => { _phaseTempVal = v; },
+        onValueChange: (v) => { _phaseLTempVal = v; },
     });
 
-    const distanceApi = wireNumericParameter({
-        paramId: 'distance',
-        inputId: 'distanceInput',
+    const lDistanceApi = wireNumericParameter({
+        paramId: 'l_distance',
+        inputId: 'lDistanceInput',
         fallbackRange: DIST_RANGE,
         step: DIST_STEP,
         defaultValue: DIST_DEFAULT,
     });
 
-    // Campo Delay editabile: l'utente inserisce ms (o samples col suffisso "sa"/"s"),
-    // si ricava la distanza con la formula inversa della patch e si scrive su `distance`.
-    setupDelayEditing(distanceApi);
+    setupDelayEditing('l', lDistanceApi, () => _phaseLTempVal);
 
+    // ── Canale R ──────────────────────────────────────────────────────────────
+    wireNumericParameter({
+        paramId: 'r_temperature',
+        inputId: 'rTemperatureInput',
+        fallbackRange: TEMP_RANGE,
+        step: TEMP_STEP,
+        defaultValue: TEMP_DEFAULT,
+        onValueChange: (v) => { _phaseRTempVal = v; },
+    });
+
+    const rDistanceApi = wireNumericParameter({
+        paramId: 'r_distance',
+        inputId: 'rDistanceInput',
+        fallbackRange: DIST_RANGE,
+        step: DIST_STEP,
+        defaultValue: DIST_DEFAULT,
+    });
+
+    setupDelayEditing('r', rDistanceApi, () => _phaseRTempVal);
+
+    // ── Phase inversion toggle ─────────────────────────────────────────────
     wireToggleParameter({
         paramId: 'phase_inv',
         buttonId: 'phaseToggleBtn',
         activeClass: 'active'
     });
 
-    // Modal Phase Alignment (stesso comportamento del menu About)
+    // ── Modal Phase Alignment ──────────────────────────────────────────────
     const alignBtn  = document.getElementById('phaseAlignBtn');
     const modal     = document.getElementById('phaseAlignPopup');
     const closeBtn  = document.getElementById('phaseAlignCloseBtn');
@@ -1870,7 +1990,6 @@ function wirePhaseControls() {
         };
         alignBtn.onclick = toggleModal;
         if (closeBtn) closeBtn.onclick = toggleModal;
-        // Chiude cliccando sullo sfondo del modal
         modal.addEventListener('click', (e) => {
             if (e.target === modal) toggleModal();
         });
@@ -1887,9 +2006,10 @@ function delayMsToDistance(delayMs, tempC) {
     return (delayMs / 1000) * speedOfSound(tempC);
 }
 
-function setupDelayEditing(distanceApi) {
-    const labelEl = document.getElementById('delayTimeValue');
-    const editBtn = document.getElementById('delayEditBtn');
+// ch: 'l' | 'r'   getTempVal: () => numero corrente di temperatura
+function setupDelayEditing(ch, distanceApi, getTempVal) {
+    const labelEl = document.getElementById(ch + 'DelayTimeValue');
+    const editBtn = document.getElementById(ch + 'DelayEditBtn');
     if (!labelEl || !editBtn || !distanceApi) return;
 
     let _editing = false;
@@ -1899,7 +2019,6 @@ function setupDelayEditing(distanceApi) {
         if (_editing) return;
         _editing = true;
 
-        // ms correnti dal testo "X.X ms (...)"
         const currentMs = parseFloat(labelEl.textContent) || 0;
 
         const inp = document.createElement('input');
@@ -1924,14 +2043,13 @@ function setupDelayEditing(distanceApi) {
                 const raw = inp.value.trim().toLowerCase().replace(',', '.');
                 const num = parseFloat(raw);
                 if (Number.isFinite(num)) {
-                    // Suffisso "sa"/"s"/"samples" ⇒ il valore è in sample
                     const isSamples = /(sa|s|samples)$/.test(raw) && !/ms$/.test(raw);
                     let delayMs = num;
                     if (isSamples && _phaseSampleRate > 0)
                         delayMs = num / _phaseSampleRate * 1000;
 
-                    const distance = delayMsToDistance(delayMs, _phaseTempVal);
-                    distanceApi.setValue(distance);   // clampata a [0, 60] m dal parametro
+                    const distance = delayMsToDistance(delayMs, getTempVal());
+                    distanceApi.setValue(distance);
                 }
             }
 
@@ -1941,7 +2059,6 @@ function setupDelayEditing(distanceApi) {
         labelEl.textContent = '';
         labelEl.appendChild(inp);
 
-        // focus/select nel tick successivo: evita il blur immediato post-dblclick
         setTimeout(() => { inp.focus(); inp.select(); }, 0);
 
         inp.addEventListener('keydown', (ev) => {
@@ -1952,14 +2069,11 @@ function setupDelayEditing(distanceApi) {
     });
 }
 
-function setDelayTime(delayValue, sampleRate) {
-    const delayLabel = document.getElementById('delayTimeValue');
+// Aggiorna il display del delay per un singolo canale ('l' o 'r').
+function _setChannelDelayTime(ch, delayValue, sampleRate) {
+    const delayLabel = document.getElementById(ch + 'DelayTimeValue');
     if (!delayLabel) return;
 
-    if (Number.isFinite(sampleRate) && sampleRate > 0)
-        _phaseSampleRate = sampleRate;
-
-    // Mentre l'utente sta digitando nel campo, non sovrascrivere il testo
     if (delayLabel.firstElementChild && delayLabel.firstElementChild.tagName === 'INPUT')
         return;
 
@@ -1970,11 +2084,24 @@ function setDelayTime(delayValue, sampleRate) {
         text += ` (${samples} sa)`;
     }
     delayLabel.textContent = text;
+}
 
-    // Illumina il button ⧖ se e solo se il ritardo è diverso da 0 ms / 0 sample
+function setDelayTime(lDelayValue, rDelayValue, sampleRate) {
+    if (Number.isFinite(sampleRate) && sampleRate > 0)
+        _phaseSampleRate = sampleRate;
+
+    _setChannelDelayTime('l', lDelayValue, sampleRate);
+    _setChannelDelayTime('r', rDelayValue, sampleRate);
+
+    // Illumina ⧖ se almeno uno dei due canali ha ritardo attivo
     const alignBtn = document.getElementById('phaseAlignBtn');
     if (alignBtn) {
-        const engaged = Math.abs(delayValue) > 1e-6 || samples !== 0;
+        const lSamples = Number.isFinite(sampleRate) && sampleRate > 0
+            ? Math.round((lDelayValue * sampleRate) / 1000) : 0;
+        const rSamples = Number.isFinite(sampleRate) && sampleRate > 0
+            ? Math.round((rDelayValue * sampleRate) / 1000) : 0;
+        const engaged = Math.abs(lDelayValue) > 1e-6 || lSamples !== 0
+                     || Math.abs(rDelayValue) > 1e-6 || rSamples !== 0;
         alignBtn.classList.toggle('engaged', engaged);
     }
 }
@@ -2269,6 +2396,7 @@ function wireMeters() {
     // Canvas loop parte sempre — indipendente dalla disponibilità del backend
     setupVectorscopeZoom();
     setupSpectrumControls();
+    setupSpectrumSpeedPanel();
     drawVectorscope();
     drawSpectrum();
     _drawSegmentMeter('balanceCanvas', 0, 'balance');
@@ -2301,7 +2429,7 @@ function wireMeters() {
                 data.outPeakL, data.outPeakR,
                 getHeldPeak('outL', data.outPeakL), getHeldPeak('outR', data.outPeakR)
             );
-            setDelayTime(data.delayTime, data.sampleRate);
+            setDelayTime(data.lDelayTime ?? 0, data.rDelayTime ?? 0, data.sampleRate);
 
             if (data.outL !== undefined && data.inL !== undefined) {
                 const inLdb  = normalizeDb(data.inL);

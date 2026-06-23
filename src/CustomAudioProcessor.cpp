@@ -531,22 +531,25 @@ void CustomAudioProcessor::rebuildSpecBands (int count)
         else { _bandLoHigh[b] = 1; _bandHiHigh[b] = 0; }
 
         // Smoothing temporale per banda.
+        // L'attacco è deliberatamente più lento del minimo fisicamente necessario:
+        // un segnale che appare di colpo (es. panning da 100% a 99%) deve salire
+        // gradualmente sullo schermo invece di saltare di scatto.
         if (blend <= 0.0f)
         {
-            // Path basso puro: la finestra lunga (~372 ms) domina già la lentezza,
-            // EMA leggera per non aggiungere altro ritardo.
-            _bandAtk[b] = 0.30f;
-            _bandDcy[b] = 0.78f;
+            // Path basso puro: attacco moderatamente lento per evitare salti visibili
+            // al primo frame utile, decadimento analogo per coerenza visiva.
+            _bandAtk[b] = 0.65f;
+            _bandDcy[b] = 0.85f;
         }
         else
         {
-            // Graduato per frequenza: calmo nella zona di transizione (così si fonde col
-            // path fine senza essere nervoso), reattivo verso l'acuto. Compensazione per
-            // frame rate (a' = a^(hop/(N/2))) così la costante di tempo non dipende da kFftHop.
+            // Graduato per frequenza: più lento vicino alla zona di crossfade
+            // (così si fonde col path fine senza essere nervoso), ancora lento ma
+            // reattivo verso l'acuto. Compensazione per frame rate invariata.
             const float u = juce::jlimit (0.0f, 1.0f,
                 std::log (fCenter / kSpecXfadeLoHz) / std::log (fMax / kSpecXfadeLoHz));
-            _bandAtk[b] = std::pow (juce::jmap (u, 0.90f, 0.45f), frameComp);
-            _bandDcy[b] = std::pow (juce::jmap (u, 0.94f, 0.82f), frameComp);
+            _bandAtk[b] = std::pow (juce::jmap (u, 0.92f, 0.68f), frameComp);
+            _bandDcy[b] = std::pow (juce::jmap (u, 0.95f, 0.87f), frameComp);
         }
     }
 
@@ -828,8 +831,10 @@ void CustomAudioProcessor::handleMessageEvent (const RNBO::MessageEvent& event)
             meterLevels.outL.store (value, std::memory_order_relaxed);
         else if (tag == tagOutRmsR)
             meterLevels.outR.store (value, std::memory_order_relaxed);
-        else if (tag == tagDelayTime)
-            meterLevels.delayTime.store (value, std::memory_order_relaxed);
+        else if (tag == tagLDelayTime)
+            meterLevels.lDelayTime.store (value, std::memory_order_relaxed);
+        else if (tag == tagRDelayTime)
+            meterLevels.rDelayTime.store (value, std::memory_order_relaxed);
         else if (tag == tagCorrelationValue)
             meterLevels.correlationValue.store (value, std::memory_order_relaxed);
     }

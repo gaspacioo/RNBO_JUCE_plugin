@@ -2,10 +2,10 @@
   {
     "name": "untitled",
     "preset": {
-      "distance": {
+      "gain": {
         "value": 0
       },
-      "gain": {
+      "l_distance": {
         "value": 0
       },
       "l_gain": {
@@ -13,6 +13,9 @@
       },
       "l_mute": {
         "value": 0
+      },
+      "l_temperature": {
+        "value": 20
       },
       "mid_gain": {
         "value": 0
@@ -23,20 +26,23 @@
       "phase_inv": {
         "value": 0
       },
+      "r_distance": {
+        "value": 0
+      },
       "r_gain": {
         "value": 0
       },
       "r_mute": {
         "value": 0
       },
+      "r_temperature": {
+        "value": 20
+      },
       "side_gain": {
         "value": 0
       },
       "side_mute": {
         "value": 0
-      },
-      "temperature": {
-        "value": 20
       }
     }
   }
