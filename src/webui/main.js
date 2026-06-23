@@ -1070,7 +1070,7 @@ function drawSpectrum() {
     const w    = _specW || canvas.width;
     const h    = _specH || canvas.height;
     const midX = w * 0.5;
-    const gap  = 1;                       // spazio ai lati della linea centrale
+    const gap  = 0.5;                       // spazio ai lati della linea centrale
     const halfW = midX - gap - 1;
     const rowH = h / _specBands;
     const dbRange = SPEC_DB_MAX - _specDbMin;
@@ -1127,8 +1127,15 @@ function drawSpectrum() {
             // ---- Vista L/R: L a sinistra, R a destra ----
             const tL = fade(norm(_specDrawL[b], tilt));
             const tR = fade(norm(_specDrawR[b], tilt));
-            if (tL > 0.003) { ctx.fillStyle = bandColor; ctx.fillRect(midX - gap - Math.max(1, tL * halfW), y, Math.max(1, tL * halfW), rh); }
-            if (tR > 0.003) { ctx.fillStyle = bandColor; ctx.fillRect(midX + gap, y, Math.max(1, tR * halfW), rh); }
+
+            // Quando il meter P è attivo in L/R, le barre colorate originano
+            // dalla punta della barra bianca IQ (offset = balance per banda).
+            // Puramente visuale: i valori dB dell'hover non cambiano.
+            const iqOffset = _specIqOn ? _specBalDraw[b] * halfW * SPEC_IQ_SCALE : 0;
+            const cx = midX + iqOffset;
+
+            if (tL > 0.003) { ctx.fillStyle = bandColor; ctx.fillRect(cx - gap - Math.max(1, tL * halfW), y, Math.max(1, tL * halfW), rh); }
+            if (tR > 0.003) { ctx.fillStyle = bandColor; ctx.fillRect(cx + gap, y, Math.max(1, tR * halfW), rh); }
 
             if (_specPeakHold) {
                 if (_specDrawL[b] >= _specPeakL[b]) { _specPeakL[b] = _specDrawL[b]; _specPeakAgeL[b] = 0; }
@@ -1139,8 +1146,8 @@ function drawSpectrum() {
                 const pL = norm(_specPeakL[b], tilt);
                 const pR = norm(_specPeakR[b], tilt);
                 ctx.fillStyle = 'rgba(255, 235, 170, 0.85)';
-                if (pL > 0.01) ctx.fillRect(midX - gap - pL * halfW, y, 1, rh);
-                if (pR > 0.01) ctx.fillRect(midX + gap + pR * halfW - 1, y, 1, rh);
+                if (pL > 0.01) ctx.fillRect(cx - gap - pL * halfW, y, 1, rh);
+                if (pR > 0.01) ctx.fillRect(cx + gap + pR * halfW - 1, y, 1, rh);
             }
         } else {
             // ---- Vista M/S: Mid riempito simmetrico + Side come linea sui due lati ----
@@ -1253,7 +1260,7 @@ function drawSpecIq(ctx, midX, halfW, h, rowH) {
         const y = h - (b + 1) * rowH;
         if (ms) {
             const [r, g, bl] = _segCorrColor(val);
-            ctx.fillStyle = `rgba(${r},${g},${bl},0.72)`;
+            ctx.fillStyle = `rgba(${r},${g},${bl},1)`;
         } else {
             ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
         }
@@ -1336,7 +1343,7 @@ function drawSpectrumReadout(ctx, w, h, midX) {
     const dbTxt = db <= SPEC_FLOOR_DB ? '−∞' : db.toFixed(1) + ' dB';
 
     // Linea orizzontale di tracking sul cursore
-    ctx.strokeStyle = 'rgba(255, 235, 170, 0.35)';
+    ctx.strokeStyle = 'rgba(255, 235, 170, 1)';
     ctx.lineWidth = 0.5;
     ctx.beginPath();
     ctx.moveTo(0, y); ctx.lineTo(w, y);

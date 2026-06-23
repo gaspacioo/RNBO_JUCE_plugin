@@ -584,7 +584,8 @@ body {
 
 /* Etichette a 3 caratteri ("M/S", "192"/"256"): font più piccolo per stare nel button */
 #specMsToggle,
-#specBandsToggle {
+#specBandsToggle,
+#specPeakToggle {
     font-size: 6px;
     letter-spacing: -0.3px;
 }
